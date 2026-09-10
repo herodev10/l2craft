@@ -284,91 +284,85 @@
   let isAdmin = false;
   let activeTab = 'item';
 
-  // Chave nova: guarda estoque E meta de unidades juntos, já no formato por item.
-  const STATE_KEY = 'craft-l2-state';
-  // Chave antiga (versões anteriores do painel): formato "material -> quantidade",
-  // compartilhado entre itens. Usada só para recuperar dados já digitados antes.
-  const LEGACY_STOCK_KEY = 'craft-l2-material-stock';
-  // Mantém o login de administrador entre recarregamentos (dado pessoal, não
-  // compartilhado — cada pessoa precisa da senha uma vez só, no seu navegador).
+  // ====== CONFIGURAÇÃO DO SUPABASE ======
+  // Troque pelos valores do SEU projeto (Supabase > Settings > API).
+  // Sem isso preenchido, o painel funciona normalmente mas não salva nada.
+  const SUPABASE_URL = 'https://paijdmiqvofhestrldty.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhaWpkbWlxdm9maGVzdHJsZHR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNzA2MjQsImV4cCI6MjEwNDY0NjYyNH0.rfbfBtGSbsVHENjowNE1ngzabIOsg85xZZT6IEtqNb4';
+  const SUPABASE_CONFIGURED = !SUPABASE_URL.includes('SEU-PROJETO') && !SUPABASE_ANON_KEY.includes('SUA_ANON_PUBLIC_KEY');
+  const STATE_ROW_ID = 'craft-state';
+  // ========================================
+
+  // Mantém o login de administrador entre recarregamentos, só neste navegador.
   const ADMIN_SESSION_KEY = 'craft-l2-admin-session';
-  let triedLegacyMigration = false;
+
   let saveTimer = null;
   let lastSavedJSON = JSON.stringify({ stock, quantities });
 
-  // O armazenamento persistente só existe quando este painel é aberto dentro
-  // do Claude (como artifact). Se for aberto como arquivo local ou hospedado
-  // fora do Claude, window.storage não existe e nada pode ser salvo/sincronizado.
-  function storageAvailable(){
-    return typeof window !== 'undefined' && window.storage
-      && typeof window.storage.get === 'function'
-      && typeof window.storage.set === 'function';
-  }
+  function storageAvailable(){ return SUPABASE_CONFIGURED; }
 
   function setSyncStatus(state){
     const dot = document.getElementById('syncDot');
     const text = document.getElementById('syncText');
     if (!dot || !text) return;
-    dot.className = 'sync-dot' + (state === 'saved' ? ' saved' : state === 'saving' ? ' saving' : state === 'unavailable' ? ' error' : '');
-    text.textContent = state === 'saved' ? 'Sincronizado com o grupo'
+    dot.className = 'sync-dot' + (state === 'saved' ? ' saved' : state === 'saving' ? ' saving' : state === 'error' ? ' error' : '');
+    text.textContent = state === 'saved' ? 'Sincronizado com o grupo (Supabase)'
       : state === 'saving' ? 'Salvando…'
-      : state === 'error' ? 'Não foi possível sincronizar (salvo só neste dispositivo)'
-      : state === 'unavailable' ? 'Sem armazenamento aqui — nada será salvo (abra este painel dentro do Claude para sincronizar)'
+      : state === 'error' ? 'Falha ao sincronizar com o Supabase — tentando de novo'
+      : state === 'not-configured' ? 'Supabase não configurado (edite SUPABASE_URL/ANON_KEY no arquivo)'
       : 'Carregando dados salvos…';
   }
 
   async function loadState(silent){
     if (!storageAvailable()){
-      setSyncStatus('unavailable');
+      setSyncStatus('not-configured');
       return;
     }
-    let foundCurrent = false;
     try{
-      const result = await window.storage.get(STATE_KEY, true);
-      if (result && result.value){
-        foundCurrent = true;
-        if (result.value !== lastSavedJSON){
-          const saved = JSON.parse(result.value);
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/craft_state?id=eq.${STATE_ROW_ID}&select=payload`,
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const rows = await res.json();
+      if (rows && rows.length && rows[0].payload){
+        const json = JSON.stringify(rows[0].payload);
+        if (json !== lastSavedJSON){
+          const saved = rows[0].payload;
           if (saved.stock) Object.keys(stock).forEach(k => { if (k in saved.stock) stock[k] = saved.stock[k]; });
           if (saved.quantities) Object.keys(quantities).forEach(k => { if (k in saved.quantities) quantities[k] = saved.quantities[k]; });
-          lastSavedJSON = result.value;
+          lastSavedJSON = json;
           renderAll();
         }
       }
-    }catch(err){ /* chave ainda não existe */ }
-
-    // Recupera dados de versões antigas do painel (uma única vez), caso a
-    // chave nova ainda não tenha nada salvo.
-    if (!foundCurrent && !triedLegacyMigration){
-      triedLegacyMigration = true;
-      try{
-        const legacy = await window.storage.get(LEGACY_STOCK_KEY, true);
-        if (legacy && legacy.value){
-          const legacyStock = JSON.parse(legacy.value);
-          Object.keys(stock).forEach(k => {
-            const matName = k.split('::').slice(1).join('::');
-            if (matName in legacyStock) stock[k] = legacyStock[matName];
-          });
-          renderAll();
-          scheduleStateSave();
-        }
-      }catch(err){ /* nada pra migrar */ }
+      if (!silent) setSyncStatus('saved');
+    }catch(err){
+      setSyncStatus('error');
     }
-
-    if (!silent) setSyncStatus('saved');
   }
 
   function scheduleStateSave(){
     if (!storageAvailable()){
-      setSyncStatus('unavailable');
+      setSyncStatus('not-configured');
       return;
     }
     setSyncStatus('saving');
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       try{
-        const json = JSON.stringify({ stock, quantities });
-        await window.storage.set(STATE_KEY, json, true);
+        const payload = { stock, quantities };
+        const json = JSON.stringify(payload);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/craft_state`, {
+          method: 'POST',
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify([{ id: STATE_ROW_ID, payload: payload, updated_at: new Date().toISOString() }])
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         lastSavedJSON = json;
         setSyncStatus('saved');
       }catch(err){
@@ -416,9 +410,7 @@
       isAdmin = false;
       updateRoleUI();
       renderAll();
-      if (storageAvailable()){
-        window.storage.delete(ADMIN_SESSION_KEY, false).catch(() => {});
-      }
+      try{ localStorage.removeItem(ADMIN_SESSION_KEY); }catch(err){}
       return;
     }
     const pass = window.prompt('Senha de administrador:');
@@ -427,24 +419,20 @@
       isAdmin = true;
       updateRoleUI();
       renderAll();
-      if (storageAvailable()){
-        window.storage.set(ADMIN_SESSION_KEY, 'true', false).catch(() => {});
-      }
+      try{ localStorage.setItem(ADMIN_SESSION_KEY, 'true'); }catch(err){}
     } else {
       alert('Senha incorreta.');
     }
   };
 
-  async function restoreAdminSession(){
-    if (!storageAvailable()) return;
+  function restoreAdminSession(){
     try{
-      const result = await window.storage.get(ADMIN_SESSION_KEY, false);
-      if (result && result.value === 'true'){
+      if (localStorage.getItem(ADMIN_SESSION_KEY) === 'true'){
         isAdmin = true;
         updateRoleUI();
         renderAll();
       }
-    }catch(err){ /* nenhuma sessão salva ainda */ }
+    }catch(err){ /* localStorage indisponível neste ambiente */ }
   }
 
   // ---------- abas ----------
