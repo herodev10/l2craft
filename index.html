@@ -46,6 +46,7 @@
   .sync-dot{ width: 7px; height: 7px; border-radius: 50%; background: var(--muted-2); transition: background 0.2s ease; }
   .sync-dot.saved{ background: var(--ok); }
   .sync-dot.saving{ background: var(--gold); }
+  .sync-dot.error{ background: var(--warn); }
   header .hint{ margin: 0; color: var(--muted); font-size: 13px; max-width: 280px; text-align: right; line-height: 1.5; }
 
   .role-box{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
@@ -288,22 +289,39 @@
   // Chave antiga (versões anteriores do painel): formato "material -> quantidade",
   // compartilhado entre itens. Usada só para recuperar dados já digitados antes.
   const LEGACY_STOCK_KEY = 'craft-l2-material-stock';
+  // Mantém o login de administrador entre recarregamentos (dado pessoal, não
+  // compartilhado — cada pessoa precisa da senha uma vez só, no seu navegador).
+  const ADMIN_SESSION_KEY = 'craft-l2-admin-session';
   let triedLegacyMigration = false;
   let saveTimer = null;
   let lastSavedJSON = JSON.stringify({ stock, quantities });
+
+  // O armazenamento persistente só existe quando este painel é aberto dentro
+  // do Claude (como artifact). Se for aberto como arquivo local ou hospedado
+  // fora do Claude, window.storage não existe e nada pode ser salvo/sincronizado.
+  function storageAvailable(){
+    return typeof window !== 'undefined' && window.storage
+      && typeof window.storage.get === 'function'
+      && typeof window.storage.set === 'function';
+  }
 
   function setSyncStatus(state){
     const dot = document.getElementById('syncDot');
     const text = document.getElementById('syncText');
     if (!dot || !text) return;
-    dot.className = 'sync-dot' + (state === 'saved' ? ' saved' : state === 'saving' ? ' saving' : '');
+    dot.className = 'sync-dot' + (state === 'saved' ? ' saved' : state === 'saving' ? ' saving' : state === 'unavailable' ? ' error' : '');
     text.textContent = state === 'saved' ? 'Sincronizado com o grupo'
       : state === 'saving' ? 'Salvando…'
       : state === 'error' ? 'Não foi possível sincronizar (salvo só neste dispositivo)'
+      : state === 'unavailable' ? 'Sem armazenamento aqui — nada será salvo (abra este painel dentro do Claude para sincronizar)'
       : 'Carregando dados salvos…';
   }
 
   async function loadState(silent){
+    if (!storageAvailable()){
+      setSyncStatus('unavailable');
+      return;
+    }
     let foundCurrent = false;
     try{
       const result = await window.storage.get(STATE_KEY, true);
@@ -341,6 +359,10 @@
   }
 
   function scheduleStateSave(){
+    if (!storageAvailable()){
+      setSyncStatus('unavailable');
+      return;
+    }
     setSyncStatus('saving');
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
@@ -394,6 +416,9 @@
       isAdmin = false;
       updateRoleUI();
       renderAll();
+      if (storageAvailable()){
+        window.storage.delete(ADMIN_SESSION_KEY, false).catch(() => {});
+      }
       return;
     }
     const pass = window.prompt('Senha de administrador:');
@@ -402,10 +427,25 @@
       isAdmin = true;
       updateRoleUI();
       renderAll();
+      if (storageAvailable()){
+        window.storage.set(ADMIN_SESSION_KEY, 'true', false).catch(() => {});
+      }
     } else {
       alert('Senha incorreta.');
     }
   };
+
+  async function restoreAdminSession(){
+    if (!storageAvailable()) return;
+    try{
+      const result = await window.storage.get(ADMIN_SESSION_KEY, false);
+      if (result && result.value === 'true'){
+        isAdmin = true;
+        updateRoleUI();
+        renderAll();
+      }
+    }catch(err){ /* nenhuma sessão salva ainda */ }
+  }
 
   // ---------- abas ----------
   document.getElementById('tabItem').onclick = () => {
@@ -637,6 +677,7 @@
   updateRoleUI();
   renderList();
   renderDetail();
+  restoreAdminSession();
   loadState();
 </script>
 </body>
