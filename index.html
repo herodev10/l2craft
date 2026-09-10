@@ -107,6 +107,8 @@
   .qty-control button:hover{ background: var(--panel-3); }
   .qty-control input{ width: 58px; text-align: center; background: transparent; border: none; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 15px; height: 36px; }
   .qty-control input:focus{ outline: none; }
+  .qty-control.disabled{ opacity: 0.55; }
+  .qty-control.disabled button, .qty-control.disabled input{ cursor: not-allowed; }
 
   .readiness{
     display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
@@ -281,43 +283,70 @@
   let isAdmin = false;
   let activeTab = 'item';
 
-  const STORAGE_KEY = 'craft-l2-material-stock';
+  // Chave nova: guarda estoque E meta de unidades juntos, já no formato por item.
+  const STATE_KEY = 'craft-l2-state';
+  // Chave antiga (versões anteriores do painel): formato "material -> quantidade",
+  // compartilhado entre itens. Usada só para recuperar dados já digitados antes.
+  const LEGACY_STOCK_KEY = 'craft-l2-material-stock';
+  let triedLegacyMigration = false;
   let saveTimer = null;
-  let lastSavedJSON = JSON.stringify(stock);
+  let lastSavedJSON = JSON.stringify({ stock, quantities });
 
   function setSyncStatus(state){
     const dot = document.getElementById('syncDot');
     const text = document.getElementById('syncText');
     if (!dot || !text) return;
     dot.className = 'sync-dot' + (state === 'saved' ? ' saved' : state === 'saving' ? ' saving' : '');
-    text.textContent = state === 'saved' ? 'Estoque sincronizado com o grupo'
+    text.textContent = state === 'saved' ? 'Sincronizado com o grupo'
       : state === 'saving' ? 'Salvando…'
       : state === 'error' ? 'Não foi possível sincronizar (salvo só neste dispositivo)'
-      : 'Carregando estoque salvo…';
+      : 'Carregando dados salvos…';
   }
 
-  async function loadStock(silent){
+  async function loadState(silent){
+    let foundCurrent = false;
     try{
-      const result = await window.storage.get(STORAGE_KEY, true);
-      if (result && result.value && result.value !== lastSavedJSON){
-        const saved = JSON.parse(result.value);
-        Object.keys(saved).forEach(k => { if (k in stock) stock[k] = saved[k]; });
-        lastSavedJSON = result.value;
-        renderAll();
+      const result = await window.storage.get(STATE_KEY, true);
+      if (result && result.value){
+        foundCurrent = true;
+        if (result.value !== lastSavedJSON){
+          const saved = JSON.parse(result.value);
+          if (saved.stock) Object.keys(stock).forEach(k => { if (k in saved.stock) stock[k] = saved.stock[k]; });
+          if (saved.quantities) Object.keys(quantities).forEach(k => { if (k in saved.quantities) quantities[k] = saved.quantities[k]; });
+          lastSavedJSON = result.value;
+          renderAll();
+        }
       }
-      if (!silent) setSyncStatus('saved');
-    }catch(err){
-      if (!silent) setSyncStatus('idle');
+    }catch(err){ /* chave ainda não existe */ }
+
+    // Recupera dados de versões antigas do painel (uma única vez), caso a
+    // chave nova ainda não tenha nada salvo.
+    if (!foundCurrent && !triedLegacyMigration){
+      triedLegacyMigration = true;
+      try{
+        const legacy = await window.storage.get(LEGACY_STOCK_KEY, true);
+        if (legacy && legacy.value){
+          const legacyStock = JSON.parse(legacy.value);
+          Object.keys(stock).forEach(k => {
+            const matName = k.split('::').slice(1).join('::');
+            if (matName in legacyStock) stock[k] = legacyStock[matName];
+          });
+          renderAll();
+          scheduleStateSave();
+        }
+      }catch(err){ /* nada pra migrar */ }
     }
+
+    if (!silent) setSyncStatus('saved');
   }
 
-  function scheduleStockSave(){
+  function scheduleStateSave(){
     setSyncStatus('saving');
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       try{
-        const json = JSON.stringify(stock);
-        await window.storage.set(STORAGE_KEY, json, true);
+        const json = JSON.stringify({ stock, quantities });
+        await window.storage.set(STATE_KEY, json, true);
         lastSavedJSON = json;
         setSyncStatus('saved');
       }catch(err){
@@ -330,8 +359,8 @@
   // periodicamente, sem sobrescrever um campo que está sendo digitado agora.
   setInterval(() => {
     const focused = document.activeElement;
-    if (focused && focused.classList && focused.classList.contains('stock-input')) return;
-    loadStock(true);
+    if (focused && focused.classList && (focused.classList.contains('stock-input') || focused.id === 'qtyInput')) return;
+    loadState(true);
   }, 4000);
 
   const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -413,11 +442,13 @@
   }
 
   function setQty(id, val){
+    if (!isAdmin) return;
     let q = parseInt(val, 10);
     if (isNaN(q) || q < 1) q = 1;
     if (q > 999) q = 999;
     quantities[id] = q;
     renderDetail();
+    scheduleStateSave();
   }
 
   function onStockInput(idx, matName, val){
@@ -446,7 +477,7 @@
 
     updateReadinessPanel(item, qty);
     renderListPillOnly(item);
-    scheduleStockSave();
+    scheduleStateSave();
   }
 
   function onOverviewInput(itemId, matName, val){
@@ -455,7 +486,7 @@
     if (isNaN(v) || v < 0) v = 0;
     stock[stockKey(itemId, matName)] = v;
     renderListPillsAll();
-    scheduleStockSave();
+    scheduleStateSave();
   }
 
   function renderListPillOnly(item){
@@ -533,11 +564,11 @@
           </div>
         </div>
         <div>
-          <div class="qty-label">Meta de unidades a craftar</div>
-          <div class="qty-control">
-            <button id="decBtn">−</button>
-            <input id="qtyInput" type="number" min="1" value="${qty}">
-            <button id="incBtn">+</button>
+          <div class="qty-label">Meta de unidades a craftar${isAdmin ? '' : ' <span style="color:var(--muted-2)">(somente admin altera)</span>'}</div>
+          <div class="qty-control${isAdmin ? '' : ' disabled'}">
+            <button id="decBtn" ${isAdmin ? '' : 'disabled'}>−</button>
+            <input id="qtyInput" type="number" min="1" value="${qty}" ${isAdmin ? '' : 'disabled'}>
+            <button id="incBtn" ${isAdmin ? '' : 'disabled'}>+</button>
           </div>
         </div>
       </div>
@@ -567,7 +598,7 @@
       </table>
 
       <div class="note">
-        <b>Como usar:</b> só o administrador edita o campo "Estoque deste item" — os demais membros veem os valores em tempo real (a página verifica atualizações automaticamente a cada poucos segundos), sem poder alterá-los. Cada item guarda seu próprio estoque de materiais, mesmo quando o nome do material se repete em outra receita. O painel mostra quanto falta farmar para a meta e quantas unidades já dá pra craftar agora. Receitas extraídas do l2hub.info (Interlude).
+        <b>Como usar:</b> só o administrador edita o estoque e a meta de unidades a craftar — os demais membros veem os valores em tempo real (a página verifica atualizações automaticamente a cada poucos segundos), sem poder alterá-los. Cada item guarda seu próprio estoque de materiais, mesmo quando o nome do material se repete em outra receita. Receitas extraídas do l2hub.info (Interlude).
       </div>
     `;
 
@@ -606,7 +637,7 @@
   updateRoleUI();
   renderList();
   renderDetail();
-  loadStock();
+  loadState();
 </script>
 </body>
 </html>
