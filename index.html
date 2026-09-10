@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Craft — Lineage 2 Interlude</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #100d17;
+    --panel: #1b1725;
+    --panel-2: #241f33;
+    --panel-3: #2c2640;
+    --border: #362f47;
+    --border-soft: #2a2438;
+    --gold: #cda65a;
+    --gold-dim: #8a7648;
+    --violet: #8d6fd1;
+    --text: #ece7f4;
+    --muted: #948da8;
+    --muted-2: #6d6784;
+    --ok: #7fb17f;
+    --warn: #c97c3d;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 8% 0%, rgba(141,111,209,0.10), transparent 40%),
+      radial-gradient(circle at 96% 92%, rgba(205,166,90,0.07), transparent 45%);
+  }
+  .wrap{ max-width: 1140px; margin: 0 auto; padding: 40px 22px 64px; }
+
+  header{
+    display:flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
+    gap: 16px; margin-bottom: 18px; padding-bottom: 20px; border-bottom: 1px solid var(--border);
+  }
+  .brand{ display: flex; flex-direction: column; gap: 8px; }
+  h1{ font-family: 'Cinzel', serif; font-weight: 600; font-size: 26px; margin: 0; color: var(--gold); letter-spacing: 0.3px; }
+  .sync-status{ display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .sync-dot{ width: 7px; height: 7px; border-radius: 50%; background: var(--muted-2); transition: background 0.2s ease; }
+  .sync-dot.saved{ background: var(--ok); }
+  .sync-dot.saving{ background: var(--gold); }
+  header .hint{ margin: 0; color: var(--muted); font-size: 13px; max-width: 280px; text-align: right; line-height: 1.5; }
+
+  .role-box{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .role-pill{
+    font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; padding: 4px 10px; border-radius: 20px;
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--border-soft);
+  }
+  .role-pill.admin{ background: rgba(205,166,90,0.15); color: var(--gold); border-color: rgba(205,166,90,0.35); }
+  .role-btn{
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    font-family: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .role-btn:hover{ background: var(--panel-3); }
+
+  .tabs{ display: flex; gap: 8px; margin-bottom: 22px; }
+  .tab-btn{
+    background: var(--panel); border: 1px solid var(--border-soft); color: var(--muted);
+    font-family: inherit; font-size: 13px; padding: 8px 16px; border-radius: 6px; cursor: pointer;
+  }
+  .tab-btn.active{ color: var(--gold); border-color: var(--violet); background: var(--panel-2); }
+
+  .board{ display: grid; grid-template-columns: 260px 1fr; gap: 24px; }
+  @media (max-width: 760px){ .board{ grid-template-columns: 1fr; } }
+
+  .item-list{ display: flex; flex-direction: column; gap: 8px; }
+  .item-btn{
+    display: flex; align-items: center; gap: 11px; text-align: left; background: var(--panel);
+    border: 1px solid var(--border-soft); border-left: 3px solid transparent;
+    color: var(--text); padding: 11px 12px; border-radius: 6px; cursor: pointer;
+    font-family: inherit; font-size: 14px; width: 100%;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .item-btn img{ width: 32px; height: 32px; image-rendering: pixelated; flex-shrink: 0; }
+  .item-btn:hover{ background: var(--panel-2); }
+  .item-btn.active{ border-left-color: var(--violet); background: var(--panel-2); }
+  .item-btn .name{ color: var(--text); font-weight: 500; }
+  .item-btn.active .name{ color: var(--gold); }
+  .item-btn small{ display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; font-weight: 400; }
+  .item-btn .ready-pill{
+    margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    padding: 2px 7px; border-radius: 20px; background: var(--panel-3); color: var(--muted); flex-shrink: 0;
+  }
+  .item-btn .ready-pill.ready{ background: rgba(127,177,127,0.18); color: var(--ok); }
+
+  .detail{ background: var(--panel); border: 1px solid var(--border-soft); border-radius: 10px; padding: 26px 28px; }
+
+  .detail-head{
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 20px;
+  }
+  .detail-head .title-row{ display: flex; align-items: center; gap: 13px; }
+  .detail-head img.icon-lg{ width: 46px; height: 46px; image-rendering: pixelated; }
+  .detail-head h2{ font-family: 'Cinzel', serif; font-size: 22px; font-weight: 600; margin: 0 0 4px; color: var(--gold); }
+  .detail-head .meta{ color: var(--muted); font-size: 12.5px; display: flex; gap: 14px; flex-wrap: wrap; }
+
+  .qty-label{ font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
+  .qty-control{ display: flex; align-items: center; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--bg); }
+  .qty-control button{ background: var(--panel-2); border: none; color: var(--gold); width: 34px; height: 36px; font-size: 17px; cursor: pointer; font-family: 'IBM Plex Mono', monospace; }
+  .qty-control button:hover{ background: var(--panel-3); }
+  .qty-control input{ width: 58px; text-align: center; background: transparent; border: none; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 15px; height: 36px; }
+  .qty-control input:focus{ outline: none; }
+
+  .readiness{
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 8px;
+    padding: 16px 18px; margin-bottom: 22px;
+  }
+  .readiness .big{ font-family: 'IBM Plex Mono', monospace; font-size: 28px; color: var(--gold); line-height: 1; }
+  .readiness .big span{ font-size: 15px; color: var(--muted); }
+  .readiness .label{ font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .readiness-bar-wrap{ flex: 1; min-width: 160px; }
+  .bar-track{ width: 100%; height: 8px; border-radius: 20px; background: var(--panel-3); overflow: hidden; }
+  .bar-fill{ height: 100%; border-radius: 20px; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); transition: width 0.25s ease; }
+  .bar-fill.complete{ background: linear-gradient(90deg, #5c8f5c, var(--ok)); }
+
+  table{ width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead th{ text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 0 10px 10px; border-bottom: 1px solid var(--border); }
+  thead th:not(:first-child), tbody td:not(:first-child){ text-align: right; }
+  tbody td{ padding: 12px 10px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+  tbody tr:last-child td{ border-bottom: none; }
+  .mat-cell{ display: flex; align-items: center; gap: 9px; }
+  .mat-cell img{ width: 24px; height: 24px; image-rendering: pixelated; flex-shrink: 0; }
+  .mono{ font-family: 'IBM Plex Mono', monospace; }
+  .stock-input{
+    width: 84px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px; padding: 6px 7px; text-align: right;
+  }
+  .stock-input:focus{ outline: none; border-color: var(--violet); }
+  .stock-input:disabled{ opacity: 0.7; cursor: not-allowed; border-color: var(--border-soft); }
+  .missing-val{ font-weight: 600; }
+  .missing-val.zero{ color: var(--ok); }
+  .missing-val.pending{ color: var(--warn); }
+  .row-bar{ width: 90px; height: 5px; border-radius: 20px; background: var(--panel-3); overflow: hidden; margin-top: 6px; margin-left: auto; }
+  .row-bar-fill{ height: 100%; background: var(--gold); }
+  .row-bar-fill.complete{ background: var(--ok); }
+
+  .used-in{ display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-start; margin-top: 4px; }
+  .used-in-tag{
+    font-size: 10.5px; color: var(--muted); background: var(--panel-3); border-radius: 4px;
+    padding: 1px 6px; font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .note{ margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+  .note b{ color: #b4abcf; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>Painel de Craft — L2 Interlude</h1>
+      <div class="sync-status" id="syncStatus"><span class="sync-dot" id="syncDot"></span><span id="syncText">Carregando estoque salvo…</span></div>
+    </div>
+    <div class="role-box">
+      <span class="role-pill" id="rolePill">Membro (somente visualização)</span>
+      <button class="role-btn" id="roleBtn">Entrar como administrador</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabItem">Por item</button>
+    <button class="tab-btn" id="tabOverview">Estoque geral</button>
+  </div>
+
+  <div class="board" id="itemView">
+    <div class="item-list" id="itemList"></div>
+    <div class="detail" id="detail"></div>
+  </div>
+
+  <div id="overviewView" style="display:none;">
+    <div class="detail">
+      <div class="detail-head" style="border-bottom:none; margin-bottom:12px; padding-bottom:0;">
+        <div>
+          <h2 style="margin-bottom:6px;">Estoque geral de materiais</h2>
+          <div class="meta">Cada linha é o estoque de um material dentro de um item específico — mesmo que o nome se repita em outra receita, os valores são independentes.</div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Material</th><th>Item</th><th>Estoque deste item</th></tr>
+        </thead>
+        <tbody id="overviewBody"></tbody>
+      </table>
+      <div class="note"><b>Como funciona:</b> quando um material (ex.: Crafted Leather) aparece em mais de uma receita, cada item tem seu próprio contador — alterar o estoque de um não afeta o outro. Só o administrador altera os valores; os demais membros só visualizam.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ICON = "https://l2hub.info/s/icons-gf/";
+  const ADMIN_PASSCODE = "craft2026";
+
+  const ITEMS = [
+    {
+      id: "plate_leather", name: "Plated Leather", slot: "Upper Body / Light",
+      icon: "armor_t47_u_i00.png", successRate: 100, mp: 144,
+      mats: [
+        { name: "Plated Leather Fragment", qty: 9, icon: "etc_plate_silver_i00.png" },
+        { name: "Crafted Leather", qty: 30, icon: "etc_crafted_leather_i00.png" },
+        { name: "Metallic Fiber", qty: 15, icon: "etc_metallic_fiber_i00.png" },
+        { name: "Crystal: C-Grade", qty: 30, icon: "etc_crystal_green_i00.png" },
+        { name: "Gemstone C", qty: 12, icon: "etc_crystal_ball_green_i00.png" }
+      ]
+    },
+    {
+      id: "plate_leather_boots", name: "Plated Leather Boots", slot: "Boots",
+      icon: "armor_t47_b_i00.png", successRate: 100, mp: 138,
+      mats: [
+        { name: "Plate Leather Boot Lining", qty: 8, icon: "etc_leather_gray_i00.png" },
+        { name: "Crafted Leather", qty: 8, icon: "etc_crafted_leather_i00.png" },
+        { name: "High Grade Suede", qty: 1, icon: "etc_pouch_yellow_i00.png" },
+        { name: "Crystal: D-Grade", qty: 40, icon: "etc_crystal_blue_i00.png" },
+        { name: "Gemstone C", qty: 3, icon: "etc_crystal_ball_green_i00.png" }
+      ]
+    },
+    {
+      id: "plate_leather_gaiters", name: "Plated Leather Gaiters", slot: "Lower Body / Light",
+      icon: "armor_t47_l_i00.png", successRate: 100, mp: 144,
+      mats: [
+        { name: "Plated Leather Gaiters Material", qty: 9, icon: "etc_leather_gray_i00.png" },
+        { name: "Crafted Leather", qty: 18, icon: "etc_crafted_leather_i00.png" },
+        { name: "Metallic Fiber", qty: 18, icon: "etc_metallic_fiber_i00.png" },
+        { name: "Crystal: C-Grade", qty: 18, icon: "etc_crystal_green_i00.png" },
+        { name: "Gemstone C", qty: 7, icon: "etc_crystal_ball_green_i00.png" }
+      ]
+    },
+    {
+      id: "plate_leather_gloves", name: "Plated Leather Gloves", slot: "Gloves",
+      icon: "armor_t47_g_i00.png", successRate: 100, mp: 144,
+      mats: [
+        { name: "Plate Leather Gloves Design", qty: 9, icon: "etc_pouch_brown_i00.png" },
+        { name: "Crafted Leather", qty: 8, icon: "etc_crafted_leather_i00.png" },
+        { name: "High Grade Suede", qty: 1, icon: "etc_pouch_yellow_i00.png" },
+        { name: "Crystal: C-Grade", qty: 10, icon: "etc_crystal_green_i00.png" },
+        { name: "Gemstone C", qty: 3, icon: "etc_crystal_ball_green_i00.png" }
+      ]
+    },
+    {
+      id: "eminence_bow", name: "Eminence Bow", slot: "Bow / Two Handed",
+      icon: "weapon_eminence_bow_i00.png", successRate: 100, mp: 165,
+      mats: [
+        { name: "Eminence Bow Shaft", qty: 11, icon: "etc_branch_gold_i00.png" },
+        { name: "Mithril Alloy", qty: 120, icon: "etc_lump_white_i00.png" },
+        { name: "Compound Braid", qty: 24, icon: "etc_compound_braid_i00.png" },
+        { name: "High Grade Suede", qty: 24, icon: "etc_pouch_yellow_i00.png" },
+        { name: "Metal Hardener", qty: 144, icon: "etc_plate_blue_i00.png" },
+        { name: "Crystal: C-Grade", qty: 420, icon: "etc_crystal_green_i00.png" },
+        { name: "Gemstone C", qty: 248, icon: "etc_crystal_ball_green_i00.png" }
+      ]
+    }
+  ];
+
+  // chave de estoque: cada item tem seu próprio estoque por material,
+  // mesmo que o nome do material se repita em outra receita.
+  function stockKey(itemId, matName){ return itemId + '::' + matName; }
+
+  // lista achatada de (item, material) — usada na aba "Estoque geral"
+  const ALL_MATS = [];
+  ITEMS.forEach(item => {
+    item.mats.forEach(m => {
+      ALL_MATS.push({ itemId: item.id, itemName: item.name, matName: m.name, icon: m.icon, qtyPerUnit: m.qty });
+    });
+  });
+
+  let currentId = ITEMS[0].id;
+  let quantities = {};
+  let stock = {}; // chave: stockKey(itemId, matName) -> quantidade
+  ITEMS.forEach(it => {
+    quantities[it.id] = 1;
+    it.mats.forEach(m => { stock[stockKey(it.id, m.name)] = 0; });
+  });
+
+  let isAdmin = false;
+  let activeTab = 'item';
+
+  const STORAGE_KEY = 'craft-l2-material-stock';
+  let saveTimer = null;
+  let lastSavedJSON = JSON.stringify(stock);
+
+  function setSyncStatus(state){
+    const dot = document.getElementById('syncDot');
+    const text = document.getElementById('syncText');
+    if (!dot || !text) return;
+    dot.className = 'sync-dot' + (state === 'saved' ? ' saved' : state === 'saving' ? ' saving' : '');
+    text.textContent = state === 'saved' ? 'Estoque sincronizado com o grupo'
+      : state === 'saving' ? 'Salvando…'
+      : state === 'error' ? 'Não foi possível sincronizar (salvo só neste dispositivo)'
+      : 'Carregando estoque salvo…';
+  }
+
+  async function loadStock(silent){
+    try{
+      const result = await window.storage.get(STORAGE_KEY, true);
+      if (result && result.value && result.value !== lastSavedJSON){
+        const saved = JSON.parse(result.value);
+        Object.keys(saved).forEach(k => { if (k in stock) stock[k] = saved[k]; });
+        lastSavedJSON = result.value;
+        renderAll();
+      }
+      if (!silent) setSyncStatus('saved');
+    }catch(err){
+      if (!silent) setSyncStatus('idle');
+    }
+  }
+
+  function scheduleStockSave(){
+    setSyncStatus('saving');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try{
+        const json = JSON.stringify(stock);
+        await window.storage.set(STORAGE_KEY, json, true);
+        lastSavedJSON = json;
+        setSyncStatus('saved');
+      }catch(err){
+        setSyncStatus('error');
+      }
+    }, 500);
+  }
+
+  // sincronização automática: verifica por atualizações de outros membros
+  // periodicamente, sem sobrescrever um campo que está sendo digitado agora.
+  setInterval(() => {
+    const focused = document.activeElement;
+    if (focused && focused.classList && focused.classList.contains('stock-input')) return;
+    loadStock(true);
+  }, 4000);
+
+  const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+  function craftableNow(item){
+    let max = Infinity;
+    item.mats.forEach(m => {
+      const have = stock[stockKey(item.id, m.name)] || 0;
+      max = Math.min(max, Math.floor(have / m.qty));
+    });
+    return isFinite(max) ? max : 0;
+  }
+
+  function renderAll(){
+    renderList();
+    if (activeTab === 'item') renderDetail();
+    else renderOverview();
+  }
+
+  // ---------- controle de administrador ----------
+  function updateRoleUI(){
+    const pill = document.getElementById('rolePill');
+    const btn = document.getElementById('roleBtn');
+    pill.textContent = isAdmin ? 'Administrador' : 'Membro (somente visualização)';
+    pill.className = 'role-pill' + (isAdmin ? ' admin' : '');
+    btn.textContent = isAdmin ? 'Sair do modo admin' : 'Entrar como administrador';
+  }
+
+  document.getElementById('roleBtn').onclick = () => {
+    if (isAdmin){
+      isAdmin = false;
+      updateRoleUI();
+      renderAll();
+      return;
+    }
+    const pass = window.prompt('Senha de administrador:');
+    if (pass === null) return;
+    if (pass === ADMIN_PASSCODE){
+      isAdmin = true;
+      updateRoleUI();
+      renderAll();
+    } else {
+      alert('Senha incorreta.');
+    }
+  };
+
+  // ---------- abas ----------
+  document.getElementById('tabItem').onclick = () => {
+    activeTab = 'item';
+    document.getElementById('tabItem').classList.add('active');
+    document.getElementById('tabOverview').classList.remove('active');
+    document.getElementById('itemView').style.display = 'grid';
+    document.getElementById('overviewView').style.display = 'none';
+    renderDetail();
+  };
+  document.getElementById('tabOverview').onclick = () => {
+    activeTab = 'overview';
+    document.getElementById('tabOverview').classList.add('active');
+    document.getElementById('tabItem').classList.remove('active');
+    document.getElementById('itemView').style.display = 'none';
+    document.getElementById('overviewView').style.display = 'block';
+    renderOverview();
+  };
+
+  // ---------- lista de itens ----------
+  function renderList(){
+    const listEl = document.getElementById('itemList');
+    listEl.innerHTML = '';
+    ITEMS.forEach(item => {
+      const ready = craftableNow(item);
+      const btn = document.createElement('button');
+      btn.className = 'item-btn' + (item.id === currentId ? ' active' : '');
+      btn.innerHTML = `<img src="${ICON + item.icon}" onerror="this.style.display='none'">
+        <span><span class="name">${item.name}</span><small>${item.slot}</small></span>
+        <span class="ready-pill${ready > 0 ? ' ready' : ''}">${ready}× pronto</span>`;
+      btn.onclick = () => { currentId = item.id; renderList(); renderDetail(); };
+      listEl.appendChild(btn);
+    });
+  }
+
+  function setQty(id, val){
+    let q = parseInt(val, 10);
+    if (isNaN(q) || q < 1) q = 1;
+    if (q > 999) q = 999;
+    quantities[id] = q;
+    renderDetail();
+  }
+
+  function onStockInput(idx, matName, val){
+    if (!isAdmin) return;
+    let v = parseInt(val, 10);
+    if (isNaN(v) || v < 0) v = 0;
+    const item = ITEMS.find(i => i.id === currentId);
+    stock[stockKey(item.id, matName)] = v;
+
+    const qty = quantities[item.id];
+    const m = item.mats[idx];
+    const needed = m.qty * qty;
+    const missing = Math.max(0, needed - v);
+    const pct = Math.min(100, needed > 0 ? (v / needed) * 100 : 100);
+
+    const missingCell = document.getElementById('missing-' + idx);
+    if (missingCell){
+      missingCell.textContent = missing === 0 ? 'Completo' : fmt(missing);
+      missingCell.className = 'mono missing-val ' + (missing === 0 ? 'zero' : 'pending');
+    }
+    const barFill = document.getElementById('rowbar-' + idx);
+    if (barFill){
+      barFill.style.width = pct + '%';
+      barFill.className = 'row-bar-fill' + (missing === 0 ? ' complete' : '');
+    }
+
+    updateReadinessPanel(item, qty);
+    renderListPillOnly(item);
+    scheduleStockSave();
+  }
+
+  function onOverviewInput(itemId, matName, val){
+    if (!isAdmin) return;
+    let v = parseInt(val, 10);
+    if (isNaN(v) || v < 0) v = 0;
+    stock[stockKey(itemId, matName)] = v;
+    renderListPillsAll();
+    scheduleStockSave();
+  }
+
+  function renderListPillOnly(item){
+    const ready = craftableNow(item);
+    document.querySelectorAll('.item-btn').forEach((btn, i) => {
+      if (ITEMS[i].id !== item.id) return;
+      const pill = btn.querySelector('.ready-pill');
+      if (pill){
+        pill.textContent = ready + '× pronto';
+        pill.className = 'ready-pill' + (ready > 0 ? ' ready' : '');
+      }
+    });
+  }
+
+  function renderListPillsAll(){ renderList(); }
+
+  function updateReadinessPanel(item, qty){
+    const ready = craftableNow(item);
+    const pct = Math.min(100, qty > 0 ? (ready / qty) * 100 : 100);
+    const bigEl = document.getElementById('readyBig');
+    const barEl = document.getElementById('readyBar');
+    if (bigEl) bigEl.innerHTML = ready + '<span> / ' + qty + ' unidades prontas agora</span>';
+    if (barEl){
+      barEl.style.width = pct + '%';
+      barEl.className = 'bar-fill' + (ready >= qty ? ' complete' : '');
+    }
+  }
+
+  // ---------- detalhe por item ----------
+  function renderDetail(){
+    const item = ITEMS.find(i => i.id === currentId);
+    const qty = quantities[item.id];
+    const detail = document.getElementById('detail');
+    const ready = craftableNow(item);
+    const readyPct = Math.min(100, qty > 0 ? (ready / qty) * 100 : 100);
+
+    let rows = '';
+    item.mats.forEach((m, idx) => {
+      const needed = m.qty * qty;
+      const have = stock[stockKey(item.id, m.name)] || 0;
+      const missing = Math.max(0, needed - have);
+      const pct = Math.min(100, needed > 0 ? (have / needed) * 100 : 100);
+      rows += `
+        <tr>
+          <td>
+            <div class="mat-cell">
+              <img src="${ICON + m.icon}" onerror="this.style.display='none'">
+              <span>${m.name}</span>
+            </div>
+          </td>
+          <td class="mono">${fmt(needed)}</td>
+          <td>
+            <input class="stock-input mono" type="number" min="0" step="1" id="stock-${idx}"
+              value="${have === 0 ? '' : have}" placeholder="0" ${isAdmin ? '' : 'disabled'}
+              oninput="onStockInput(${idx}, '${m.name.replace(/'/g,"\\'")}', this.value)">
+          </td>
+          <td>
+            <div class="mono missing-val ${missing === 0 ? 'zero' : 'pending'}" id="missing-${idx}">${missing === 0 ? 'Completo' : fmt(missing)}</div>
+            <div class="row-bar"><div class="row-bar-fill${missing === 0 ? ' complete' : ''}" id="rowbar-${idx}" style="width:${pct}%"></div></div>
+          </td>
+        </tr>`;
+    });
+
+    detail.innerHTML = `
+      <div class="detail-head">
+        <div class="title-row">
+          <img class="icon-lg" src="${ICON + item.icon}" onerror="this.style.display='none'">
+          <div>
+            <h2>${item.name}</h2>
+            <div class="meta">
+              <span>${item.slot}</span>
+              <span>Taxa de sucesso: ${item.successRate}%</span>
+              <span>MP por craft: ${item.mp}</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="qty-label">Meta de unidades a craftar</div>
+          <div class="qty-control">
+            <button id="decBtn">−</button>
+            <input id="qtyInput" type="number" min="1" value="${qty}">
+            <button id="incBtn">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="readiness">
+        <div>
+          <div class="big" id="readyBig">${ready}<span> / ${qty} unidades prontas agora</span></div>
+          <div class="label">Com o estoque atual do grupo</div>
+        </div>
+        <div class="readiness-bar-wrap">
+          <div class="bar-track"><div class="bar-fill${ready >= qty ? ' complete' : ''}" id="readyBar" style="width:${readyPct}%"></div></div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Material</th>
+            <th>Necessário (${qty}×)</th>
+            <th>Estoque deste item</th>
+            <th>Falta farmar</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+
+      <div class="note">
+        <b>Como usar:</b> só o administrador edita o campo "Estoque deste item" — os demais membros veem os valores em tempo real (a página verifica atualizações automaticamente a cada poucos segundos), sem poder alterá-los. Cada item guarda seu próprio estoque de materiais, mesmo quando o nome do material se repete em outra receita. O painel mostra quanto falta farmar para a meta e quantas unidades já dá pra craftar agora. Receitas extraídas do l2hub.info (Interlude).
+      </div>
+    `;
+
+    document.getElementById('decBtn').onclick = () => setQty(item.id, quantities[item.id] - 1);
+    document.getElementById('incBtn').onclick = () => setQty(item.id, quantities[item.id] + 1);
+    const input = document.getElementById('qtyInput');
+    input.onchange = () => setQty(item.id, input.value);
+    input.oninput = () => { quantities[item.id] = parseInt(input.value,10) || 1; };
+  }
+
+  // ---------- visão geral ----------
+  // cada linha é um par (item, material) — o estoque é independente por item,
+  // mesmo quando o nome do material se repete em outra receita.
+  function renderOverview(){
+    const body = document.getElementById('overviewBody');
+    body.innerHTML = ALL_MATS.map(row => {
+      const have = stock[stockKey(row.itemId, row.matName)] || 0;
+      return `
+        <tr>
+          <td>
+            <div class="mat-cell">
+              <img src="${ICON + row.icon}" onerror="this.style.display='none'">
+              <span>${row.matName}</span>
+            </div>
+          </td>
+          <td><div class="used-in"><span class="used-in-tag">${row.itemName} ×${row.qtyPerUnit}</span></div></td>
+          <td>
+            <input class="stock-input mono" type="number" min="0" step="1"
+              value="${have === 0 ? '' : have}" placeholder="0" ${isAdmin ? '' : 'disabled'}
+              oninput="onOverviewInput('${row.itemId}', '${row.matName.replace(/'/g,"\\'")}', this.value)">
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  updateRoleUI();
+  renderList();
+  renderDetail();
+  loadStock();
+</script>
+</body>
+</html>
