@@ -6,67 +6,88 @@
 <title>Painel de Craft — Lineage 2 Interlude</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
-    --bg: #100d17;
-    --panel: #1b1725;
-    --panel-2: #241f33;
-    --panel-3: #2c2640;
-    --border: #362f47;
-    --border-soft: #2a2438;
-    --gold: #cda65a;
-    --gold-dim: #8a7648;
-    --violet: #8d6fd1;
-    --text: #ece7f4;
-    --muted: #948da8;
-    --muted-2: #6d6784;
-    --ok: #7fb17f;
-    --warn: #c97c3d;
+    --bg: #100d17; --panel: #1b1725; --panel-2: #241f33; --panel-3: #2c2640;
+    --border: #362f47; --border-soft: #2a2438;
+    --gold: #cda65a; --gold-dim: #8a7648; --violet: #8d6fd1;
+    --text: #ece7f4; --muted: #948da8; --muted-2: #6d6784;
+    --ok: #7fb17f; --warn: #c97c3d; --danger: #b3583f;
   }
   *{ box-sizing: border-box; }
   html,body{ margin:0; padding:0; }
   body{
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'IBM Plex Sans', sans-serif;
-    min-height: 100vh;
+    background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; min-height: 100vh;
     background-image:
       radial-gradient(circle at 8% 0%, rgba(141,111,209,0.10), transparent 40%),
       radial-gradient(circle at 96% 92%, rgba(205,166,90,0.07), transparent 45%);
   }
   .wrap{ max-width: 1140px; margin: 0 auto; padding: 40px 22px 64px; }
 
+  /* -------- modal de login/cadastro -------- */
+  .modal-overlay{
+    position: fixed; inset: 0; background: rgba(8,6,12,0.72); z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .auth-card{ position: relative; }
+  .modal-close{
+    position: absolute; top: 12px; right: 14px; background: none; border: none;
+    color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1;
+  }
+  .modal-close:hover{ color: var(--text); }
+  .auth-card{
+    background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px;
+    padding: 34px 32px; width: 100%; max-width: 380px;
+  }
+  .auth-card h1{ font-family: 'Cinzel', serif; color: var(--gold); font-size: 22px; margin: 0 0 6px; }
+  .auth-card .sub{ color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  .field{ margin-bottom: 14px; }
+  .field label{ display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .field input{
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: inherit; font-size: 14px; padding: 10px 11px;
+  }
+  .field input:focus{ outline: none; border-color: var(--violet); }
+  .auth-actions{ display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+  .btn{
+    background: var(--gold); border: none; color: #1b1508; font-family: inherit; font-weight: 600;
+    font-size: 14px; padding: 11px; border-radius: 6px; cursor: pointer;
+  }
+  .btn:hover{ filter: brightness(1.08); }
+  .btn:disabled{ opacity: 0.6; cursor: not-allowed; }
+  .btn.secondary{ background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .switch-mode{ text-align: center; font-size: 12.5px; color: var(--muted); margin-top: 16px; }
+  .switch-mode a{ color: var(--gold); cursor: pointer; text-decoration: underline; }
+  .auth-msg{ font-size: 12.5px; margin-top: 12px; padding: 9px 11px; border-radius: 6px; }
+  .auth-msg.error{ background: rgba(179,88,63,0.16); color: #e0a48f; }
+  .auth-msg.ok{ background: rgba(127,177,127,0.16); color: var(--ok); }
+
+  /* -------- cabeçalho / conta -------- */
   header{
     display:flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
     gap: 16px; margin-bottom: 18px; padding-bottom: 20px; border-bottom: 1px solid var(--border);
   }
-  .brand{ display: flex; flex-direction: column; gap: 8px; }
   h1{ font-family: 'Cinzel', serif; font-weight: 600; font-size: 26px; margin: 0; color: var(--gold); letter-spacing: 0.3px; }
-  .sync-status{ display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
-  .sync-dot{ width: 7px; height: 7px; border-radius: 50%; background: var(--muted-2); transition: background 0.2s ease; }
-  .sync-dot.saved{ background: var(--ok); }
-  .sync-dot.saving{ background: var(--gold); }
-  .sync-dot.error{ background: var(--warn); }
-  header .hint{ margin: 0; color: var(--muted); font-size: 13px; max-width: 280px; text-align: right; line-height: 1.5; }
-
-  .role-box{ display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-  .role-pill{
-    font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; padding: 4px 10px; border-radius: 20px;
+  .account-box{ display: flex; align-items: center; gap: 12px; }
+  .account-pill{
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 5px 11px; border-radius: 20px;
     background: var(--panel-2); color: var(--muted); border: 1px solid var(--border-soft);
   }
-  .role-pill.admin{ background: rgba(205,166,90,0.15); color: var(--gold); border-color: rgba(205,166,90,0.35); }
-  .role-btn{
+  .account-pill.admin{ background: rgba(205,166,90,0.15); color: var(--gold); border-color: rgba(205,166,90,0.35); }
+  .logout-btn{
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
-    font-family: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    font-family: inherit; font-size: 12.5px; padding: 7px 13px; border-radius: 6px; cursor: pointer;
   }
-  .role-btn:hover{ background: var(--panel-3); }
+  .logout-btn:hover{ background: var(--panel-3); }
 
-  .tabs{ display: flex; gap: 8px; margin-bottom: 22px; }
+  .tabs{ display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
   .tab-btn{
     background: var(--panel); border: 1px solid var(--border-soft); color: var(--muted);
     font-family: inherit; font-size: 13px; padding: 8px 16px; border-radius: 6px; cursor: pointer;
   }
   .tab-btn.active{ color: var(--gold); border-color: var(--violet); background: var(--panel-2); }
+  .tab-btn.admin-tab{ border-color: rgba(205,166,90,0.35); }
 
   .board{ display: grid; grid-template-columns: 260px 1fr; gap: 24px; }
   @media (max-width: 760px){ .board{ grid-template-columns: 1fr; } }
@@ -129,8 +150,9 @@
   thead th:not(:first-child), tbody td:not(:first-child){ text-align: right; }
   tbody td{ padding: 12px 10px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
   tbody tr:last-child td{ border-bottom: none; }
-  .mat-cell{ display: flex; align-items: center; gap: 9px; }
+  .mat-cell{ display: flex; align-items: center; gap: 9px; text-align: left; }
   .mat-cell img{ width: 24px; height: 24px; image-rendering: pixelated; flex-shrink: 0; }
+  .mat-cell .craft-link{ font-size: 10.5px; color: var(--violet); cursor: pointer; text-decoration: underline; margin-left: 6px; }
   .mono{ font-family: 'IBM Plex Mono', monospace; }
   .stock-input{
     width: 84px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
@@ -146,30 +168,92 @@
   .row-bar-fill.complete{ background: var(--ok); }
 
   .used-in{ display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-start; margin-top: 4px; }
-  .used-in-tag{
-    font-size: 10.5px; color: var(--muted); background: var(--panel-3); border-radius: 4px;
-    padding: 1px 6px; font-family: 'IBM Plex Mono', monospace;
-  }
+  .used-in-tag{ font-size: 10.5px; color: var(--muted); background: var(--panel-3); border-radius: 4px; padding: 1px 6px; font-family: 'IBM Plex Mono', monospace; }
 
   .note{ margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); line-height: 1.55; }
   .note b{ color: #b4abcf; }
+
+  /* -------- contribuir / aprovações / histórico -------- */
+  .form-grid{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 560px){ .form-grid{ grid-template-columns: 1fr; } }
+  .field select{
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: inherit; font-size: 14px; padding: 10px 11px;
+  }
+  .file-drop{
+    border: 1px dashed var(--border); border-radius: 8px; padding: 18px; text-align: center;
+    color: var(--muted); font-size: 13px; cursor: pointer; background: var(--bg);
+  }
+  .file-drop.has-file{ border-color: var(--ok); color: var(--ok); }
+  .file-drop input{ display: none; }
+
+  .contrib-card{
+    display: flex; gap: 14px; background: var(--panel-2); border: 1px solid var(--border-soft);
+    border-radius: 8px; padding: 14px; margin-bottom: 12px; align-items: flex-start; flex-wrap: wrap;
+  }
+  .contrib-card img.proof{ width: 96px; height: 96px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0; cursor: pointer; }
+  .contrib-info{ flex: 1; min-width: 180px; }
+  .contrib-info .who{ font-weight: 600; color: var(--gold); font-size: 14px; }
+  .contrib-info .what{ font-size: 13.5px; color: var(--text); margin: 3px 0; }
+  .contrib-info .when{ font-size: 11.5px; color: var(--muted-2); }
+  .contrib-actions{ display: flex; gap: 8px; align-items: center; }
+  .pill-status{ font-size: 11px; padding: 3px 9px; border-radius: 20px; font-family: 'IBM Plex Mono', monospace; }
+  .pill-status.approved{ background: rgba(127,177,127,0.18); color: var(--ok); }
+  .pill-status.rejected{ background: rgba(179,88,63,0.18); color: #e0a48f; }
+  .btn.small{ padding: 7px 13px; font-size: 12.5px; }
+  .btn.reject{ background: var(--panel-3); color: #e0a48f; border: 1px solid rgba(179,88,63,0.4); }
+
+  .empty-state{ color: var(--muted); font-size: 13.5px; text-align: center; padding: 30px 10px; }
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<div class="modal-overlay" id="authModal" style="display:none;">
+  <div class="auth-card">
+    <button class="modal-close" id="authModalClose">×</button>
+    <h1>Painel de Craft — L2</h1>
+    <div class="sub" id="authSub">Entre com sua conta para contribuir com o grupo.</div>
+
+    <div class="field" id="nicknameField" style="display:none;">
+      <label>Nick do personagem</label>
+      <input type="text" id="nicknameInput" placeholder="Ex: DarkHunter">
+    </div>
+    <div class="field">
+      <label>E-mail</label>
+      <input type="email" id="emailInput" placeholder="voce@exemplo.com">
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="passwordInput" placeholder="••••••••">
+    </div>
+
+    <div class="auth-actions">
+      <button class="btn" id="authSubmitBtn">Entrar</button>
+    </div>
+    <div class="switch-mode" id="switchModeText">
+      Não tem conta? <a id="switchModeLink">Criar conta</a>
+    </div>
+    <div id="authMsg"></div>
+  </div>
+</div>
+
+<div class="wrap" id="appRoot">
   <header>
-    <div class="brand">
-      <h1>Painel de Craft — L2 Interlude</h1>
+    <h1>Painel de Craft — L2 Interlude</h1>
+    <div class="account-box" id="accountBox" style="display:none;">
+      <span class="account-pill" id="accountPill">—</span>
+      <button class="logout-btn" id="logoutBtn">Sair</button>
     </div>
-    <div class="role-box">
-      <span class="role-pill" id="rolePill">Membro (somente visualização)</span>
-      <button class="role-btn" id="roleBtn">Entrar como administrador</button>
-    </div>
+    <button class="btn" id="openAuthBtn" style="width:auto; padding:9px 18px;">Entrar</button>
   </header>
 
   <div class="tabs">
     <button class="tab-btn active" id="tabItem">Por item</button>
+
     <button class="tab-btn" id="tabOverview">Estoque geral</button>
+    <button class="tab-btn" id="tabContribuir">Contribuir</button>
+    <button class="tab-btn" id="tabHistorico">Histórico</button>
+    <button class="tab-btn admin-tab" id="tabAprovacoes" style="display:none;">Aprovações</button>
   </div>
 
   <div class="board" id="itemView">
@@ -179,26 +263,78 @@
 
   <div id="overviewView" style="display:none;">
     <div class="detail">
-      <div class="detail-head" style="border-bottom:none; margin-bottom:12px; padding-bottom:0;">
-        <div>
-          <h2 style="margin-bottom:6px;">Estoque geral de materiais</h2>
-          <div class="meta">Cada linha é o estoque de um material dentro de um item específico — mesmo que o nome se repita em outra receita, os valores são independentes.</div>
-        </div>
-      </div>
-      <table>
-        <thead>
-          <tr><th>Material</th><th>Item</th><th>Estoque deste item</th></tr>
-        </thead>
+      <h2 style="margin:0 0 6px;">Estoque geral de materiais</h2>
+      <div class="meta">Cada linha é o estoque de um material dentro de um item específico.</div>
+      <table style="margin-top:14px;">
+        <thead><tr><th>Material</th><th>Item</th><th>Estoque deste item</th></tr></thead>
         <tbody id="overviewBody"></tbody>
       </table>
-      <div class="note"><b>Como funciona:</b> quando um material (ex.: Crafted Leather) aparece em mais de uma receita, cada item tem seu próprio contador — alterar o estoque de um não afeta o outro. Só o administrador altera os valores; os demais membros só visualizam.</div>
+    </div>
+  </div>
+
+  <div id="contribView" style="display:none;">
+    <div class="detail">
+      <h2 style="margin:0 0 6px;">Enviar contribuição de material</h2>
+      <div class="meta" style="margin-bottom:18px;">Escolha o item, o material que você mandou, a quantidade, e anexe o print do envio in-game como comprovante. Fica pendente até o admin aprovar.</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Item</label>
+          <select id="contribItem"></select>
+        </div>
+        <div class="field">
+          <label>Material</label>
+          <select id="contribMaterial"></select>
+        </div>
+        <div class="field">
+          <label>Quantidade enviada</label>
+          <input type="number" min="1" id="contribQty" placeholder="Ex: 30">
+        </div>
+        <div class="field">
+          <label>Print do envio (comprovante)</label>
+          <div class="file-drop" id="fileDrop">
+            <span id="fileDropLabel">Clique para escolher a imagem</span>
+            <input type="file" id="contribFile" accept="image/*">
+          </div>
+        </div>
+      </div>
+      <div class="auth-actions" style="max-width:260px; margin-top:8px;">
+        <button class="btn" id="contribSubmitBtn">Enviar contribuição</button>
+      </div>
+      <div id="contribMsg"></div>
+
+      <div style="margin-top:28px; border-top:1px solid var(--border); padding-top:18px;">
+        <h2 style="margin:0 0 12px; font-size:18px;">Minhas contribuições</h2>
+        <div id="myContribList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="historicoView" style="display:none;">
+    <div class="detail">
+      <h2 style="margin:0 0 6px;">Histórico de contribuições aprovadas</h2>
+      <div class="meta" style="margin-bottom:16px;">Quem ajudou, com o quê, e quando.</div>
+      <div id="historicoList"></div>
+    </div>
+  </div>
+
+  <div id="aprovacoesView" style="display:none;">
+    <div class="detail">
+      <h2 style="margin:0 0 6px;">Contribuições aguardando aprovação</h2>
+      <div class="meta" style="margin-bottom:16px;">Confira o print antes de aprovar — a quantidade é somada direto ao estoque do item.</div>
+      <div id="pendingList"></div>
     </div>
   </div>
 </div>
 
 <script>
   const ICON = "https://l2hub.info/s/icons-gf/";
-  const ADMIN_PASSCODE = "craft2026";
+
+  // ====== CONFIGURAÇÃO DO SUPABASE ======
+  const SUPABASE_URL = 'https://paijdmiqvofhestrldty.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhaWpkbWlxdm9maGVzdHJsZHR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNzA2MjQsImV4cCI6MjEwNDY0NjYyNH0.rfbfBtGSbsVHENjowNE1ngzabIOsg85xZZT6IEtqNb4';
+  const SUPABASE_CONFIGURED = !SUPABASE_URL.includes('SEU-PROJETO') && !SUPABASE_ANON_KEY.includes('SUA_ANON_PUBLIC_KEY');
+  const sb = SUPABASE_CONFIGURED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+  // ========================================
 
   const ITEMS = [
     {
@@ -260,11 +396,10 @@
     }
   ];
 
-  // chave de estoque: cada item tem seu próprio estoque por material,
-  // mesmo que o nome do material se repita em outra receita.
-  function stockKey(itemId, matName){ return itemId + '::' + matName; }
+  // materiais que também são itens craftáveis (pra linkar "ver receita")
+  const CRAFTABLE_BY_NAME = {};
+  ITEMS.forEach(it => { CRAFTABLE_BY_NAME[it.name] = it.id; });
 
-  // lista achatada de (item, material) — usada na aba "Estoque geral"
   const ALL_MATS = [];
   ITEMS.forEach(item => {
     item.mats.forEach(m => {
@@ -272,113 +407,194 @@
     });
   });
 
+  function stockKey(itemId, matName){ return itemId + '::' + matName; }
+
   let currentId = ITEMS[0].id;
   let quantities = {};
-  let stock = {}; // chave: stockKey(itemId, matName) -> quantidade
+  let stock = {};
   ITEMS.forEach(it => {
     quantities[it.id] = 1;
     it.mats.forEach(m => { stock[stockKey(it.id, m.name)] = 0; });
   });
 
+  let session = null;
+  let profile = null; // { nickname, is_admin }
   let isAdmin = false;
   let activeTab = 'item';
+  let stockSaveTimers = {};
+  let qtySaveTimers = {};
 
-  // ====== CONFIGURAÇÃO DO SUPABASE ======
-  // Troque pelos valores do SEU projeto (Supabase > Settings > API).
-  // Sem isso preenchido, o painel funciona normalmente mas não salva nada.
-  const SUPABASE_URL = 'https://paijdmiqvofhestrldty.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhaWpkbWlxdm9maGVzdHJsZHR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNzA2MjQsImV4cCI6MjEwNDY0NjYyNH0.rfbfBtGSbsVHENjowNE1ngzabIOsg85xZZT6IEtqNb4';
-  const SUPABASE_CONFIGURED = !SUPABASE_URL.includes('SEU-PROJETO') && !SUPABASE_ANON_KEY.includes('SUA_ANON_PUBLIC_KEY');
-  const STATE_ROW_ID = 'craft-state';
-  // ========================================
+  const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
-  // Mantém o login de administrador entre recarregamentos, só neste navegador.
-  const ADMIN_SESSION_KEY = 'craft-l2-admin-session';
+  // ---------------- AUTENTICAÇÃO ----------------
+  let authMode = 'signin';
 
-  let saveTimer = null;
-  let lastSavedJSON = JSON.stringify({ stock, quantities });
-
-  function storageAvailable(){ return SUPABASE_CONFIGURED; }
-
-  function setSyncStatus(state){
-    const dot = document.getElementById('syncDot');
-    const text = document.getElementById('syncText');
-    if (!dot || !text) return;
-    dot.className = 'sync-dot' + (state === 'saved' ? ' saved' : state === 'saving' ? ' saving' : state === 'error' ? ' error' : '');
-    text.textContent = state === 'saved' ? 'Sincronizado com o grupo (Supabase)'
-      : state === 'saving' ? 'Salvando…'
-      : state === 'error' ? 'Falha ao sincronizar com o Supabase — tentando de novo'
-      : state === 'not-configured' ? 'Supabase não configurado (edite SUPABASE_URL/ANON_KEY no arquivo)'
-      : 'Carregando dados salvos…';
+  function setAuthMsg(text, kind){
+    const el = document.getElementById('authMsg');
+    el.innerHTML = text ? `<div class="auth-msg ${kind}">${text}</div>` : '';
   }
 
-  async function loadState(silent){
-    if (!storageAvailable()){
-      setSyncStatus('not-configured');
+  function toggleAuthMode(){
+    authMode = authMode === 'signin' ? 'signup' : 'signin';
+    document.getElementById('nicknameField').style.display = authMode === 'signup' ? 'block' : 'none';
+    document.getElementById('authSubmitBtn').textContent = authMode === 'signup' ? 'Criar conta' : 'Entrar';
+    document.getElementById('authSub').textContent = authMode === 'signup'
+      ? 'Crie sua conta para contribuir com o grupo.'
+      : 'Entre com sua conta para acessar o estoque do grupo.';
+    document.getElementById('switchModeText').innerHTML = authMode === 'signup'
+      ? 'Já tem conta? <a id="switchModeLink">Entrar</a>'
+      : 'Não tem conta? <a id="switchModeLink">Criar conta</a>';
+    document.getElementById('switchModeLink').onclick = toggleAuthMode;
+    setAuthMsg('', '');
+  }
+  document.getElementById('switchModeLink').onclick = toggleAuthMode;
+
+  document.getElementById('authSubmitBtn').onclick = async () => {
+    if (!SUPABASE_CONFIGURED){
+      setAuthMsg('Supabase não configurado neste arquivo (edite SUPABASE_URL/ANON_KEY no código).', 'error');
       return;
     }
+    const email = document.getElementById('emailInput').value.trim();
+    const password = document.getElementById('passwordInput').value;
+    const nickname = document.getElementById('nicknameInput').value.trim();
+    if (!email || !password){ setAuthMsg('Preencha e-mail e senha.', 'error'); return; }
+    if (authMode === 'signup' && !nickname){ setAuthMsg('Informe o nick do personagem.', 'error'); return; }
+
+    const btn = document.getElementById('authSubmitBtn');
+    btn.disabled = true;
     try{
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/craft_state?id=eq.${STATE_ROW_ID}&select=payload`,
-        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
-      );
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const rows = await res.json();
-      if (rows && rows.length && rows[0].payload){
-        const json = JSON.stringify(rows[0].payload);
-        if (json !== lastSavedJSON){
-          const saved = rows[0].payload;
-          if (saved.stock) Object.keys(stock).forEach(k => { if (k in saved.stock) stock[k] = saved.stock[k]; });
-          if (saved.quantities) Object.keys(quantities).forEach(k => { if (k in saved.quantities) quantities[k] = saved.quantities[k]; });
-          lastSavedJSON = json;
-          renderAll();
+      if (authMode === 'signup'){
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.user){
+          await sb.from('profiles').insert({ id: data.user.id, nickname });
         }
+        setAuthMsg('Conta criada! Se a confirmação por e-mail estiver ativa no seu projeto, confirme antes de entrar.', 'ok');
+      } else {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
       }
-      if (!silent) setSyncStatus('saved');
     }catch(err){
-      setSyncStatus('error');
+      setAuthMsg(err.message || 'Não foi possível concluir. Tente de novo.', 'error');
     }
+    btn.disabled = false;
+  };
+
+  function openAuthModal(){
+    document.getElementById('authModal').style.display = 'flex';
+    if (!SUPABASE_CONFIGURED) setAuthMsg('Supabase não configurado neste arquivo ainda (edite SUPABASE_URL/ANON_KEY no código).', 'error');
+    else setAuthMsg('', '');
+  }
+  function closeAuthModal(){
+    document.getElementById('authModal').style.display = 'none';
+  }
+  document.getElementById('openAuthBtn').onclick = openAuthModal;
+  document.getElementById('authModalClose').onclick = closeAuthModal;
+  document.getElementById('authModal').addEventListener('click', (e) => {
+    if (e.target.id === 'authModal') closeAuthModal();
+  });
+
+  document.getElementById('logoutBtn').onclick = async () => {
+    if (sb) await sb.auth.signOut();
+  };
+
+  async function onAuthed(newSession){
+    session = newSession;
+    const { data: profileRows } = await sb.from('profiles').select('*').eq('id', session.user.id).limit(1);
+    profile = (profileRows && profileRows[0]) || { nickname: session.user.email, is_admin: false };
+    isAdmin = !!profile.is_admin;
+
+    closeAuthModal();
+    document.getElementById('accountBox').style.display = 'flex';
+    document.getElementById('openAuthBtn').style.display = 'none';
+    const pill = document.getElementById('accountPill');
+    pill.textContent = profile.nickname + (isAdmin ? ' · Administrador' : ' · Membro');
+    pill.className = 'account-pill' + (isAdmin ? ' admin' : '');
+    document.getElementById('tabAprovacoes').style.display = isAdmin ? 'inline-block' : 'none';
+
+    renderList();
+    renderDetail();
+    if (activeTab === 'overview') renderOverview();
+    loadMyContributions();
+    if (isAdmin) loadPendingContribs();
   }
 
-  function scheduleStateSave(){
-    if (!storageAvailable()){
-      setSyncStatus('not-configured');
-      return;
-    }
-    setSyncStatus('saving');
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => {
-      try{
-        const payload = { stock, quantities };
-        const json = JSON.stringify(payload);
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/craft_state`, {
-          method: 'POST',
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates'
-          },
-          body: JSON.stringify([{ id: STATE_ROW_ID, payload: payload, updated_at: new Date().toISOString() }])
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        lastSavedJSON = json;
-        setSyncStatus('saved');
-      }catch(err){
-        setSyncStatus('error');
-      }
-    }, 500);
+  function onSignedOut(){
+    session = null; profile = null; isAdmin = false;
+    document.getElementById('accountBox').style.display = 'none';
+    document.getElementById('openAuthBtn').style.display = 'inline-block';
+    document.getElementById('tabAprovacoes').style.display = 'none';
+    if (activeTab === 'aprovacoes') setActiveTab('item');
+    renderList();
+    renderDetail();
+    if (activeTab === 'overview') renderOverview();
+    setAuthMsg('', '');
   }
 
-  // sincronização automática: verifica por atualizações de outros membros
-  // periodicamente, sem sobrescrever um campo que está sendo digitado agora.
+  async function initAuth(){
+    // O site funciona (leitura) mesmo sem login — isso só cuida de quem já está logado.
+    populateContribSelectors();
+    renderList();
+    renderDetail();
+    loadStockAndTargets();
+    loadHistory();
+
+    if (!SUPABASE_CONFIGURED) return;
+    const { data } = await sb.auth.getSession();
+    if (data.session) onAuthed(data.session);
+    sb.auth.onAuthStateChange((event, newSession) => {
+      if (newSession) onAuthed(newSession);
+      else onSignedOut();
+    });
+  }
+
+  // ---------------- ESTOQUE E METAS (Supabase) ----------------
+  async function loadStockAndTargets(){
+    if (!sb) return;
+    try{
+      const [{ data: stockRows }, { data: targetRows }] = await Promise.all([
+        sb.from('material_stock').select('*'),
+        sb.from('craft_targets').select('*')
+      ]);
+      (stockRows || []).forEach(r => {
+        const k = stockKey(r.item_id, r.material_name);
+        if (k in stock) stock[k] = r.quantity;
+      });
+      (targetRows || []).forEach(r => {
+        if (r.item_id in quantities) quantities[r.item_id] = r.quantity;
+      });
+      renderAll();
+    }catch(err){ /* falha silenciosa de rede — tenta de novo no próximo poll */ }
+  }
+
   setInterval(() => {
     const focused = document.activeElement;
     if (focused && focused.classList && (focused.classList.contains('stock-input') || focused.id === 'qtyInput')) return;
-    loadState(true);
-  }, 4000);
+    loadStockAndTargets();
+    if (isAdmin && activeTab === 'aprovacoes') loadPendingContribs();
+  }, 5000);
 
-  const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  function saveStockValue(itemId, matName, value){
+    if (!sb || !isAdmin) return;
+    const key = stockKey(itemId, matName);
+    clearTimeout(stockSaveTimers[key]);
+    stockSaveTimers[key] = setTimeout(async () => {
+      try{
+        await sb.from('material_stock')
+          .upsert({ item_id: itemId, material_name: matName, quantity: value }, { onConflict: 'item_id,material_name' });
+      }catch(err){ /* tenta de novo na próxima edição */ }
+    }, 500);
+  }
+
+  function saveTargetValue(itemId, value){
+    if (!sb || !isAdmin) return;
+    clearTimeout(qtySaveTimers[itemId]);
+    qtySaveTimers[itemId] = setTimeout(async () => {
+      try{
+        await sb.from('craft_targets').upsert({ item_id: itemId, quantity: value }, { onConflict: 'item_id' });
+      }catch(err){ /* tenta de novo na próxima edição */ }
+    }, 500);
+  }
 
   function craftableNow(item){
     let max = Infinity;
@@ -392,67 +608,27 @@
   function renderAll(){
     renderList();
     if (activeTab === 'item') renderDetail();
-    else renderOverview();
+    else if (activeTab === 'overview') renderOverview();
   }
 
-  // ---------- controle de administrador ----------
-  function updateRoleUI(){
-    const pill = document.getElementById('rolePill');
-    const btn = document.getElementById('roleBtn');
-    pill.textContent = isAdmin ? 'Administrador' : 'Membro (somente visualização)';
-    pill.className = 'role-pill' + (isAdmin ? ' admin' : '');
-    btn.textContent = isAdmin ? 'Sair do modo admin' : 'Entrar como administrador';
+  // ---------------- ABAS ----------------
+  function setActiveTab(tab){
+    activeTab = tab;
+    ['tabItem','tabOverview','tabContribuir','tabHistorico','tabAprovacoes'].forEach(id => document.getElementById(id).classList.remove('active'));
+    ['itemView','overviewView','contribView','historicoView','aprovacoesView'].forEach(id => document.getElementById(id).style.display = 'none');
+    if (tab === 'item'){ document.getElementById('tabItem').classList.add('active'); document.getElementById('itemView').style.display = 'grid'; renderDetail(); }
+    if (tab === 'overview'){ document.getElementById('tabOverview').classList.add('active'); document.getElementById('overviewView').style.display = 'block'; renderOverview(); }
+    if (tab === 'contribuir'){ document.getElementById('tabContribuir').classList.add('active'); document.getElementById('contribView').style.display = 'block'; loadMyContributions(); }
+    if (tab === 'historico'){ document.getElementById('tabHistorico').classList.add('active'); document.getElementById('historicoView').style.display = 'block'; loadHistory(); }
+    if (tab === 'aprovacoes'){ document.getElementById('tabAprovacoes').classList.add('active'); document.getElementById('aprovacoesView').style.display = 'block'; loadPendingContribs(); }
   }
+  document.getElementById('tabItem').onclick = () => setActiveTab('item');
+  document.getElementById('tabOverview').onclick = () => setActiveTab('overview');
+  document.getElementById('tabContribuir').onclick = () => setActiveTab('contribuir');
+  document.getElementById('tabHistorico').onclick = () => setActiveTab('historico');
+  document.getElementById('tabAprovacoes').onclick = () => setActiveTab('aprovacoes');
 
-  document.getElementById('roleBtn').onclick = () => {
-    if (isAdmin){
-      isAdmin = false;
-      updateRoleUI();
-      renderAll();
-      try{ localStorage.removeItem(ADMIN_SESSION_KEY); }catch(err){}
-      return;
-    }
-    const pass = window.prompt('Senha de administrador:');
-    if (pass === null) return;
-    if (pass === ADMIN_PASSCODE){
-      isAdmin = true;
-      updateRoleUI();
-      renderAll();
-      try{ localStorage.setItem(ADMIN_SESSION_KEY, 'true'); }catch(err){}
-    } else {
-      alert('Senha incorreta.');
-    }
-  };
-
-  function restoreAdminSession(){
-    try{
-      if (localStorage.getItem(ADMIN_SESSION_KEY) === 'true'){
-        isAdmin = true;
-        updateRoleUI();
-        renderAll();
-      }
-    }catch(err){ /* localStorage indisponível neste ambiente */ }
-  }
-
-  // ---------- abas ----------
-  document.getElementById('tabItem').onclick = () => {
-    activeTab = 'item';
-    document.getElementById('tabItem').classList.add('active');
-    document.getElementById('tabOverview').classList.remove('active');
-    document.getElementById('itemView').style.display = 'grid';
-    document.getElementById('overviewView').style.display = 'none';
-    renderDetail();
-  };
-  document.getElementById('tabOverview').onclick = () => {
-    activeTab = 'overview';
-    document.getElementById('tabOverview').classList.add('active');
-    document.getElementById('tabItem').classList.remove('active');
-    document.getElementById('itemView').style.display = 'none';
-    document.getElementById('overviewView').style.display = 'block';
-    renderOverview();
-  };
-
-  // ---------- lista de itens ----------
+  // ---------------- LISTA DE ITENS ----------------
   function renderList(){
     const listEl = document.getElementById('itemList');
     listEl.innerHTML = '';
@@ -468,6 +644,13 @@
     });
   }
 
+  function goToItem(itemId){
+    currentId = itemId;
+    setActiveTab('item');
+    renderList();
+    renderDetail();
+  }
+
   function setQty(id, val){
     if (!isAdmin) return;
     let q = parseInt(val, 10);
@@ -475,7 +658,7 @@
     if (q > 999) q = 999;
     quantities[id] = q;
     renderDetail();
-    scheduleStateSave();
+    saveTargetValue(id, q);
   }
 
   function onStockInput(idx, matName, val){
@@ -503,8 +686,8 @@
     }
 
     updateReadinessPanel(item, qty);
-    renderListPillOnly(item);
-    scheduleStateSave();
+    renderList();
+    saveStockValue(item.id, matName, v);
   }
 
   function onOverviewInput(itemId, matName, val){
@@ -512,23 +695,9 @@
     let v = parseInt(val, 10);
     if (isNaN(v) || v < 0) v = 0;
     stock[stockKey(itemId, matName)] = v;
-    renderListPillsAll();
-    scheduleStateSave();
+    renderList();
+    saveStockValue(itemId, matName, v);
   }
-
-  function renderListPillOnly(item){
-    const ready = craftableNow(item);
-    document.querySelectorAll('.item-btn').forEach((btn, i) => {
-      if (ITEMS[i].id !== item.id) return;
-      const pill = btn.querySelector('.ready-pill');
-      if (pill){
-        pill.textContent = ready + '× pronto';
-        pill.className = 'ready-pill' + (ready > 0 ? ' ready' : '');
-      }
-    });
-  }
-
-  function renderListPillsAll(){ renderList(); }
 
   function updateReadinessPanel(item, qty){
     const ready = craftableNow(item);
@@ -536,13 +705,10 @@
     const bigEl = document.getElementById('readyBig');
     const barEl = document.getElementById('readyBar');
     if (bigEl) bigEl.innerHTML = ready + '<span> / ' + qty + ' unidades prontas agora</span>';
-    if (barEl){
-      barEl.style.width = pct + '%';
-      barEl.className = 'bar-fill' + (ready >= qty ? ' complete' : '');
-    }
+    if (barEl){ barEl.style.width = pct + '%'; barEl.className = 'bar-fill' + (ready >= qty ? ' complete' : ''); }
   }
 
-  // ---------- detalhe por item ----------
+  // ---------------- DETALHE POR ITEM ----------------
   function renderDetail(){
     const item = ITEMS.find(i => i.id === currentId);
     const qty = quantities[item.id];
@@ -556,12 +722,14 @@
       const have = stock[stockKey(item.id, m.name)] || 0;
       const missing = Math.max(0, needed - have);
       const pct = Math.min(100, needed > 0 ? (have / needed) * 100 : 100);
+      const craftableLink = CRAFTABLE_BY_NAME[m.name] && CRAFTABLE_BY_NAME[m.name] !== item.id
+        ? `<span class="craft-link" onclick="goToItem('${CRAFTABLE_BY_NAME[m.name]}')">ver receita</span>` : '';
       rows += `
         <tr>
           <td>
             <div class="mat-cell">
               <img src="${ICON + m.icon}" onerror="this.style.display='none'">
-              <span>${m.name}</span>
+              <span>${m.name}</span>${craftableLink}
             </div>
           </td>
           <td class="mono">${fmt(needed)}</td>
@@ -611,21 +779,12 @@
       </div>
 
       <table>
-        <thead>
-          <tr>
-            <th>Material</th>
-            <th>Necessário (${qty}×)</th>
-            <th>Estoque deste item</th>
-            <th>Falta farmar</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
+        <thead><tr><th>Material</th><th>Necessário (${qty}×)</th><th>Estoque deste item</th><th>Falta farmar</th></tr></thead>
+        <tbody>${rows}</tbody>
       </table>
 
       <div class="note">
-        <b>Como usar:</b> só o administrador edita o estoque e a meta de unidades a craftar — os demais membros veem os valores em tempo real (a página verifica atualizações automaticamente a cada poucos segundos), sem poder alterá-los. Cada item guarda seu próprio estoque de materiais, mesmo quando o nome do material se repete em outra receita. Receitas extraídas do l2hub.info (Interlude).
+        <b>Como usar:</b> só o administrador edita estoque e meta. Materiais com "ver receita" também são craftáveis — clique para ver a cadeia. Receitas extraídas do l2hub.info (Interlude).
       </div>
     `;
 
@@ -633,39 +792,166 @@
     document.getElementById('incBtn').onclick = () => setQty(item.id, quantities[item.id] + 1);
     const input = document.getElementById('qtyInput');
     input.onchange = () => setQty(item.id, input.value);
-    input.oninput = () => { quantities[item.id] = parseInt(input.value,10) || 1; };
+    input.oninput = () => { if (isAdmin) quantities[item.id] = parseInt(input.value,10) || 1; };
   }
 
-  // ---------- visão geral ----------
-  // cada linha é um par (item, material) — o estoque é independente por item,
-  // mesmo quando o nome do material se repete em outra receita.
+  // ---------------- VISÃO GERAL ----------------
   function renderOverview(){
     const body = document.getElementById('overviewBody');
     body.innerHTML = ALL_MATS.map(row => {
       const have = stock[stockKey(row.itemId, row.matName)] || 0;
       return `
         <tr>
-          <td>
-            <div class="mat-cell">
-              <img src="${ICON + row.icon}" onerror="this.style.display='none'">
-              <span>${row.matName}</span>
-            </div>
-          </td>
+          <td><div class="mat-cell"><img src="${ICON + row.icon}" onerror="this.style.display='none'"><span>${row.matName}</span></div></td>
           <td><div class="used-in"><span class="used-in-tag">${row.itemName} ×${row.qtyPerUnit}</span></div></td>
-          <td>
-            <input class="stock-input mono" type="number" min="0" step="1"
+          <td><input class="stock-input mono" type="number" min="0" step="1"
               value="${have === 0 ? '' : have}" placeholder="0" ${isAdmin ? '' : 'disabled'}
-              oninput="onOverviewInput('${row.itemId}', '${row.matName.replace(/'/g,"\\'")}', this.value)">
-          </td>
+              oninput="onOverviewInput('${row.itemId}', '${row.matName.replace(/'/g,"\\'")}', this.value)"></td>
         </tr>`;
     }).join('');
   }
 
-  updateRoleUI();
-  renderList();
-  renderDetail();
-  restoreAdminSession();
-  loadState();
+  // ---------------- CONTRIBUIR ----------------
+  function populateContribSelectors(){
+    const itemSel = document.getElementById('contribItem');
+    itemSel.innerHTML = ITEMS.map(it => `<option value="${it.id}">${it.name}</option>`).join('');
+    itemSel.onchange = populateMaterialSelector;
+    populateMaterialSelector();
+  }
+  function populateMaterialSelector(){
+    const itemId = document.getElementById('contribItem').value;
+    const item = ITEMS.find(i => i.id === itemId);
+    document.getElementById('contribMaterial').innerHTML = item.mats.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+  }
+
+  let selectedFile = null;
+  document.getElementById('fileDrop').onclick = () => document.getElementById('contribFile').click();
+  document.getElementById('contribFile').onchange = (e) => {
+    selectedFile = e.target.files[0] || null;
+    document.getElementById('fileDropLabel').textContent = selectedFile ? selectedFile.name : 'Clique para escolher a imagem';
+    document.getElementById('fileDrop').classList.toggle('has-file', !!selectedFile);
+  };
+
+  function setContribMsg(text, kind){
+    document.getElementById('contribMsg').innerHTML = text ? `<div class="auth-msg ${kind}">${text}</div>` : '';
+  }
+
+  document.getElementById('contribSubmitBtn').onclick = async () => {
+    if (!sb) return;
+    if (!session){ openAuthModal(); return; }
+    const itemId = document.getElementById('contribItem').value;
+    const matName = document.getElementById('contribMaterial').value;
+    const qty = parseInt(document.getElementById('contribQty').value, 10);
+    if (!qty || qty < 1){ setContribMsg('Informe uma quantidade válida.', 'error'); return; }
+    if (!selectedFile){ setContribMsg('Anexe o print do envio como comprovante.', 'error'); return; }
+
+    const btn = document.getElementById('contribSubmitBtn');
+    btn.disabled = true;
+    setContribMsg('Enviando…', 'ok');
+    try{
+      const path = `${session.user.id}/${Date.now()}_${selectedFile.name}`;
+      const { error: upErr } = await sb.storage.from('proofs').upload(path, selectedFile);
+      if (upErr) throw upErr;
+      const { data: urlData } = sb.storage.from('proofs').getPublicUrl(path);
+
+      const { error: insErr } = await sb.from('contributions').insert({
+        user_id: session.user.id,
+        nickname: profile.nickname,
+        item_id: itemId,
+        material_name: matName,
+        quantity: qty,
+        screenshot_url: urlData.publicUrl,
+        status: 'pending'
+      });
+      if (insErr) throw insErr;
+
+      setContribMsg('Contribuição enviada! Aguarde a aprovação do admin.', 'ok');
+      document.getElementById('contribQty').value = '';
+      selectedFile = null;
+      document.getElementById('fileDropLabel').textContent = 'Clique para escolher a imagem';
+      document.getElementById('fileDrop').classList.remove('has-file');
+      document.getElementById('contribFile').value = '';
+      loadMyContributions();
+    }catch(err){
+      setContribMsg(err.message || 'Não foi possível enviar. Tente de novo.', 'error');
+    }
+    btn.disabled = false;
+  };
+
+  async function loadMyContributions(){
+    const el = document.getElementById('myContribList');
+    if (!sb || !session){
+      el.innerHTML = '<div class="empty-state">Faça login para ver e enviar suas contribuições. <span class="craft-link" onclick="openAuthModal()">Entrar</span></div>';
+      return;
+    }
+    const { data } = await sb.from('contributions').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    if (!data || !data.length){ el.innerHTML = '<div class="empty-state">Você ainda não enviou nenhuma contribuição.</div>'; return; }
+    el.innerHTML = data.map(c => `
+      <div class="contrib-card">
+        <img class="proof" src="${c.screenshot_url}" onclick="window.open('${c.screenshot_url}','_blank')">
+        <div class="contrib-info">
+          <div class="what">${fmt(c.quantity)}× ${c.material_name} <span style="color:var(--muted)">— ${itemName(c.item_id)}</span></div>
+          <div class="when">${new Date(c.created_at).toLocaleString('pt-BR')}</div>
+        </div>
+        <span class="pill-status ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : ''}">${c.status === 'approved' ? 'Aprovado' : c.status === 'rejected' ? 'Rejeitado' : 'Pendente'}</span>
+      </div>`).join('');
+  }
+
+  function itemName(id){ const it = ITEMS.find(i => i.id === id); return it ? it.name : id; }
+
+  // ---------------- HISTÓRICO ----------------
+  async function loadHistory(){
+    if (!sb) return;
+    const { data } = await sb.from('contributions').select('*').eq('status', 'approved').order('reviewed_at', { ascending: false }).limit(100);
+    const el = document.getElementById('historicoList');
+    if (!data || !data.length){ el.innerHTML = '<div class="empty-state">Nenhuma contribuição aprovada ainda.</div>'; return; }
+    el.innerHTML = data.map(c => `
+      <div class="contrib-card">
+        <div class="contrib-info">
+          <div class="who">${c.nickname}</div>
+          <div class="what">${fmt(c.quantity)}× ${c.material_name} <span style="color:var(--muted)">— ${itemName(c.item_id)}</span></div>
+          <div class="when">${new Date(c.reviewed_at || c.created_at).toLocaleString('pt-BR')}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  // ---------------- APROVAÇÕES (admin) ----------------
+  async function loadPendingContribs(){
+    if (!sb || !isAdmin) return;
+    const { data } = await sb.from('contributions').select('*').eq('status', 'pending').order('created_at', { ascending: true });
+    const el = document.getElementById('pendingList');
+    if (!data || !data.length){ el.innerHTML = '<div class="empty-state">Nenhuma contribuição pendente.</div>'; return; }
+    el.innerHTML = data.map(c => `
+      <div class="contrib-card">
+        <img class="proof" src="${c.screenshot_url}" onclick="window.open('${c.screenshot_url}','_blank')">
+        <div class="contrib-info">
+          <div class="who">${c.nickname}</div>
+          <div class="what">${fmt(c.quantity)}× ${c.material_name} <span style="color:var(--muted)">— ${itemName(c.item_id)}</span></div>
+          <div class="when">${new Date(c.created_at).toLocaleString('pt-BR')}</div>
+        </div>
+        <div class="contrib-actions">
+          <button class="btn small" onclick="approveContrib('${c.id}')">Aprovar</button>
+          <button class="btn small reject" onclick="rejectContrib('${c.id}')">Rejeitar</button>
+        </div>
+      </div>`).join('');
+  }
+
+  async function approveContrib(id){
+    try{
+      await sb.rpc('approve_contribution', { contribution_id: id });
+      await loadStockAndTargets();
+      loadPendingContribs();
+      loadHistory();
+    }catch(err){ alert(err.message || 'Não foi possível aprovar.'); }
+  }
+  async function rejectContrib(id){
+    try{
+      await sb.rpc('reject_contribution', { contribution_id: id });
+      loadPendingContribs();
+    }catch(err){ alert(err.message || 'Não foi possível rejeitar.'); }
+  }
+
+  initAuth();
 </script>
 </body>
 </html>
