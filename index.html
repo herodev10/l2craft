@@ -415,8 +415,7 @@
     it.mats.forEach(m => { stock[stockKey(it.id, m.name)] = 0; });
   });
 
-  let session = null;
-  let profile = null; // { nickname, is_admin }
+  let member = null; // { id, login, is_admin }
   let isAdmin = false;
   let activeTab = 'item';
   let stockSaveTimers = {};
@@ -424,14 +423,8 @@
 
   const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
-  // ---------------- AUTENTICAÇÃO ----------------
-
-  // O Supabase Auth exige um e-mail internamente; convertemos o login
-  // digitado num e-mail fake e fixo, então pra quem usa o site é só "login".
-  function loginToPseudoEmail(login){
-    const clean = login.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
-    return clean + '@l2craft.online';
-  }
+  // ---------------- AUTENTICAÇÃO (login próprio, sem e-mail) ----------------
+  const MEMBER_STORAGE_KEY = 'l2craft_member';
 
   function setAuthMsg(text, kind){
     const el = document.getElementById('authMsg');
@@ -446,32 +439,16 @@
     const login = document.getElementById('loginInput').value.trim();
     const password = document.getElementById('passwordInput').value;
     if (!login || !password){ setAuthMsg('Preencha login e senha.', 'error'); return; }
-    if (login.length < 3){ setAuthMsg('O login precisa ter pelo menos 3 caracteres.', 'error'); return; }
 
-    const pseudoEmail = loginToPseudoEmail(login);
     const btn = document.getElementById('authSubmitBtn');
     btn.disabled = true;
     setAuthMsg('Entrando…', 'ok');
     try{
-      // Tenta entrar primeiro. Se a conta ainda não existir, cria na hora.
-      const { error: signInErr } = await sb.auth.signInWithPassword({ email: pseudoEmail, password });
-      if (signInErr){
-        const { data, error: signUpErr } = await sb.auth.signUp({ email: pseudoEmail, password });
-        if (signUpErr){
-          if ((signUpErr.message || '').toLowerCase().includes('already registered')){
-            throw new Error('Login ou senha incorretos.');
-          }
-          throw signUpErr;
-        }
-        if (data.user){
-          await sb.from('profiles').insert({ id: data.user.id, nickname: login, status: 'approved' });
-        }
-        if (!data.session){
-          setAuthMsg('Conta criada! Se o projeto exigir confirmação de e-mail, desative isso nas configurações do Supabase (Authentication > Providers > Email).', 'error');
-          btn.disabled = false;
-          return;
-        }
-      }
+      const { data, error } = await sb.rpc('register_or_login', { p_login: login, p_password: password });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) throw new Error('Não foi possível entrar. Tente de novo.');
+      onAuthed({ id: row.member_id, login: row.member_login, is_admin: row.member_is_admin });
     }catch(err){
       setAuthMsg(err.message || 'Não foi possível entrar. Tente de novo.', 'error');
     }
@@ -492,21 +469,21 @@
     if (e.target.id === 'authModal') closeAuthModal();
   });
 
-  document.getElementById('logoutBtn').onclick = async () => {
-    if (sb) await sb.auth.signOut();
+  document.getElementById('logoutBtn').onclick = () => {
+    try{ localStorage.removeItem(MEMBER_STORAGE_KEY); }catch(err){}
+    onSignedOut();
   };
 
-  async function onAuthed(newSession){
-    session = newSession;
-    const { data: profileRows } = await sb.from('profiles').select('*').eq('id', session.user.id).limit(1);
-    profile = (profileRows && profileRows[0]) || { nickname: session.user.email, is_admin: false, status: 'approved' };
-    isAdmin = !!profile.is_admin;
+  function onAuthed(m){
+    member = m;
+    isAdmin = !!member.is_admin;
+    try{ localStorage.setItem(MEMBER_STORAGE_KEY, JSON.stringify(member)); }catch(err){}
 
     closeAuthModal();
     document.getElementById('accountBox').style.display = 'flex';
     document.getElementById('openAuthBtn').style.display = 'none';
     const pill = document.getElementById('accountPill');
-    pill.textContent = profile.nickname + (isAdmin ? ' · Administrador' : ' · Membro');
+    pill.textContent = member.login + (isAdmin ? ' · Administrador' : ' · Membro');
     pill.className = 'account-pill' + (isAdmin ? ' admin' : '');
     document.getElementById('tabAprovacoes').style.display = isAdmin ? 'inline-block' : 'none';
 
@@ -518,7 +495,7 @@
   }
 
   function onSignedOut(){
-    session = null; profile = null; isAdmin = false;
+    member = null; isAdmin = false;
     document.getElementById('accountBox').style.display = 'none';
     document.getElementById('openAuthBtn').style.display = 'inline-block';
     document.getElementById('tabAprovacoes').style.display = 'none';
@@ -526,11 +503,12 @@
     renderList();
     renderDetail();
     if (activeTab === 'overview') renderOverview();
+    loadMyContributions();
     setAuthMsg('', '');
   }
 
-  async function initAuth(){
-    // O site funciona (leitura) mesmo sem login — isso só cuida de quem já está logado.
+  function initAuth(){
+    // O site funciona (leitura) mesmo sem login.
     populateContribSelectors();
     renderList();
     renderDetail();
@@ -538,12 +516,10 @@
     loadHistory();
 
     if (!SUPABASE_CONFIGURED) return;
-    const { data } = await sb.auth.getSession();
-    if (data.session) onAuthed(data.session);
-    sb.auth.onAuthStateChange((event, newSession) => {
-      if (newSession) onAuthed(newSession);
-      else onSignedOut();
-    });
+    try{
+      const saved = localStorage.getItem(MEMBER_STORAGE_KEY);
+      if (saved) onAuthed(JSON.parse(saved));
+    }catch(err){ /* nenhuma sessão salva neste navegador */ }
   }
 
   // ---------------- ESTOQUE E METAS (Supabase) ----------------
@@ -573,23 +549,22 @@
   }, 5000);
 
   function saveStockValue(itemId, matName, value){
-    if (!sb || !isAdmin) return;
+    if (!sb || !isAdmin || !member) return;
     const key = stockKey(itemId, matName);
     clearTimeout(stockSaveTimers[key]);
     stockSaveTimers[key] = setTimeout(async () => {
       try{
-        await sb.from('material_stock')
-          .upsert({ item_id: itemId, material_name: matName, quantity: value }, { onConflict: 'item_id,material_name' });
+        await sb.rpc('admin_set_stock', { p_member_id: member.id, p_item_id: itemId, p_material_name: matName, p_quantity: value });
       }catch(err){ /* tenta de novo na próxima edição */ }
     }, 500);
   }
 
   function saveTargetValue(itemId, value){
-    if (!sb || !isAdmin) return;
+    if (!sb || !isAdmin || !member) return;
     clearTimeout(qtySaveTimers[itemId]);
     qtySaveTimers[itemId] = setTimeout(async () => {
       try{
-        await sb.from('craft_targets').upsert({ item_id: itemId, quantity: value }, { onConflict: 'item_id' });
+        await sb.rpc('admin_set_target', { p_member_id: member.id, p_item_id: itemId, p_quantity: value });
       }catch(err){ /* tenta de novo na próxima edição */ }
     }, 500);
   }
@@ -836,7 +811,7 @@
 
   document.getElementById('contribSubmitBtn').onclick = async () => {
     if (!sb) return;
-    if (!session){ openAuthModal(); return; }
+    if (!member){ openAuthModal(); return; }
     const itemId = document.getElementById('contribItem').value;
     const matName = document.getElementById('contribMaterial').value;
     const qty = parseInt(document.getElementById('contribQty').value, 10);
@@ -848,21 +823,19 @@
     try{
       let screenshotUrl = null;
       if (selectedFile){
-        const path = `${session.user.id}/${Date.now()}_${selectedFile.name}`;
+        const path = `${member.id}/${Date.now()}_${selectedFile.name}`;
         const { error: upErr } = await sb.storage.from('proofs').upload(path, selectedFile);
         if (upErr) throw upErr;
         const { data: urlData } = sb.storage.from('proofs').getPublicUrl(path);
         screenshotUrl = urlData.publicUrl;
       }
 
-      const { error: insErr } = await sb.from('contributions').insert({
-        user_id: session.user.id,
-        nickname: profile.nickname,
-        item_id: itemId,
-        material_name: matName,
-        quantity: qty,
-        screenshot_url: screenshotUrl,
-        status: 'pending'
+      const { error: insErr } = await sb.rpc('submit_contribution', {
+        p_member_id: member.id,
+        p_item_id: itemId,
+        p_material_name: matName,
+        p_quantity: qty,
+        p_screenshot_url: screenshotUrl
       });
       if (insErr) throw insErr;
 
@@ -881,11 +854,11 @@
 
   async function loadMyContributions(){
     const el = document.getElementById('myContribList');
-    if (!sb || !session){
+    if (!sb || !member){
       el.innerHTML = '<div class="empty-state">Faça login para ver e enviar suas contribuições. <span class="craft-link" onclick="openAuthModal()">Entrar</span></div>';
       return;
     }
-    const { data } = await sb.from('contributions').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    const { data } = await sb.from('contributions').select('*').eq('member_id', member.id).order('created_at', { ascending: false });
     if (!data || !data.length){ el.innerHTML = '<div class="empty-state">Você ainda não enviou nenhuma contribuição.</div>'; return; }
     el.innerHTML = data.map(c => `
       <div class="contrib-card">
@@ -942,16 +915,18 @@
   }
 
   async function approveContrib(id){
+    if (!member) return;
     try{
-      await sb.rpc('approve_contribution', { contribution_id: id });
+      await sb.rpc('admin_review_contribution', { p_member_id: member.id, p_contribution_id: id, p_approve: true });
       await loadStockAndTargets();
       loadPendingContribs();
       loadHistory();
     }catch(err){ alert(err.message || 'Não foi possível aprovar.'); }
   }
   async function rejectContrib(id){
+    if (!member) return;
     try{
-      await sb.rpc('reject_contribution', { contribution_id: id });
+      await sb.rpc('admin_review_contribution', { p_member_id: member.id, p_contribution_id: id, p_approve: false });
       loadPendingContribs();
     }catch(err){ alert(err.message || 'Não foi possível rejeitar.'); }
   }
