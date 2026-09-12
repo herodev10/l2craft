@@ -217,7 +217,7 @@
   <div class="auth-card">
     <button class="modal-close" id="authModalClose">×</button>
     <h1>Painel de Craft — L2</h1>
-    <div class="sub" id="authSub">Entre com sua conta para contribuir com o grupo.</div>
+    <div class="sub" id="authSub">Digite seu login e senha — se ainda não existir, a conta é criada na hora.</div>
 
     <div class="field">
       <label>Login</label>
@@ -230,9 +230,6 @@
 
     <div class="auth-actions">
       <button class="btn" id="authSubmitBtn">Entrar</button>
-    </div>
-    <div class="switch-mode" id="switchModeText">
-      Não tem conta? <a id="switchModeLink">Criar conta</a>
     </div>
     <div id="authMsg"></div>
   </div>
@@ -320,11 +317,6 @@
 
   <div id="aprovacoesView" style="display:none;">
     <div class="detail">
-      <h2 style="margin:0 0 6px;">Novas contas aguardando aprovação</h2>
-      <div class="meta" style="margin-bottom:16px;">Quem se cadastrou e ainda não pode contribuir.</div>
-      <div id="pendingMembersList"></div>
-    </div>
-    <div class="detail" style="margin-top:20px;">
       <h2 style="margin:0 0 6px;">Contribuições aguardando aprovação</h2>
       <div class="meta" style="margin-bottom:16px;">Confira o print antes de aprovar — a quantidade é somada direto ao estoque do item.</div>
       <div id="pendingList"></div>
@@ -433,8 +425,6 @@
   const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   // ---------------- AUTENTICAÇÃO ----------------
-  let authMode = 'signin';
-  let isApproved = false;
 
   // O Supabase Auth exige um e-mail internamente; convertemos o login
   // digitado num e-mail fake e fixo, então pra quem usa o site é só "login".
@@ -447,20 +437,6 @@
     const el = document.getElementById('authMsg');
     el.innerHTML = text ? `<div class="auth-msg ${kind}">${text}</div>` : '';
   }
-
-  function toggleAuthMode(){
-    authMode = authMode === 'signin' ? 'signup' : 'signin';
-    document.getElementById('authSubmitBtn').textContent = authMode === 'signup' ? 'Criar conta' : 'Entrar';
-    document.getElementById('authSub').textContent = authMode === 'signup'
-      ? 'Crie seu login. Um administrador precisa aprovar antes de você poder contribuir.'
-      : 'Entre com seu login para acessar o site.';
-    document.getElementById('switchModeText').innerHTML = authMode === 'signup'
-      ? 'Já tem conta? <a id="switchModeLink">Entrar</a>'
-      : 'Não tem conta? <a id="switchModeLink">Criar conta</a>';
-    document.getElementById('switchModeLink').onclick = toggleAuthMode;
-    setAuthMsg('', '');
-  }
-  document.getElementById('switchModeLink').onclick = toggleAuthMode;
 
   document.getElementById('authSubmitBtn').onclick = async () => {
     if (!SUPABASE_CONFIGURED){
@@ -475,23 +451,29 @@
     const pseudoEmail = loginToPseudoEmail(login);
     const btn = document.getElementById('authSubmitBtn');
     btn.disabled = true;
+    setAuthMsg('Entrando…', 'ok');
     try{
-      if (authMode === 'signup'){
-        const { data, error } = await sb.auth.signUp({ email: pseudoEmail, password });
-        if (error){
-          if ((error.message || '').toLowerCase().includes('already registered')) throw new Error('Esse login já está em uso.');
-          throw error;
+      // Tenta entrar primeiro. Se a conta ainda não existir, cria na hora.
+      const { error: signInErr } = await sb.auth.signInWithPassword({ email: pseudoEmail, password });
+      if (signInErr){
+        const { data, error: signUpErr } = await sb.auth.signUp({ email: pseudoEmail, password });
+        if (signUpErr){
+          if ((signUpErr.message || '').toLowerCase().includes('already registered')){
+            throw new Error('Login ou senha incorretos.');
+          }
+          throw signUpErr;
         }
         if (data.user){
-          await sb.from('profiles').insert({ id: data.user.id, nickname: login, status: 'pending' });
+          await sb.from('profiles').insert({ id: data.user.id, nickname: login, status: 'approved' });
         }
-        setAuthMsg('Conta criada! Agora é só aguardar um administrador aprovar seu acesso.', 'ok');
-      } else {
-        const { error } = await sb.auth.signInWithPassword({ email: pseudoEmail, password });
-        if (error) throw new Error('Login ou senha incorretos.');
+        if (!data.session){
+          setAuthMsg('Conta criada! Se o projeto exigir confirmação de e-mail, desative isso nas configurações do Supabase (Authentication > Providers > Email).', 'error');
+          btn.disabled = false;
+          return;
+        }
       }
     }catch(err){
-      setAuthMsg(err.message || 'Não foi possível concluir. Tente de novo.', 'error');
+      setAuthMsg(err.message || 'Não foi possível entrar. Tente de novo.', 'error');
     }
     btn.disabled = false;
   };
@@ -517,29 +499,26 @@
   async function onAuthed(newSession){
     session = newSession;
     const { data: profileRows } = await sb.from('profiles').select('*').eq('id', session.user.id).limit(1);
-    profile = (profileRows && profileRows[0]) || { nickname: session.user.email, is_admin: false, status: 'pending' };
+    profile = (profileRows && profileRows[0]) || { nickname: session.user.email, is_admin: false, status: 'approved' };
     isAdmin = !!profile.is_admin;
-    isApproved = isAdmin || profile.status === 'approved';
 
     closeAuthModal();
     document.getElementById('accountBox').style.display = 'flex';
     document.getElementById('openAuthBtn').style.display = 'none';
     const pill = document.getElementById('accountPill');
-    const statusLabel = isAdmin ? 'Administrador' : profile.status === 'approved' ? 'Membro'
-      : profile.status === 'rejected' ? 'Acesso recusado' : 'Aguardando aprovação';
-    pill.textContent = profile.nickname + ' · ' + statusLabel;
-    pill.className = 'account-pill' + (isAdmin ? ' admin' : (!isApproved ? ' pending' : ''));
+    pill.textContent = profile.nickname + (isAdmin ? ' · Administrador' : ' · Membro');
+    pill.className = 'account-pill' + (isAdmin ? ' admin' : '');
     document.getElementById('tabAprovacoes').style.display = isAdmin ? 'inline-block' : 'none';
 
     renderList();
     renderDetail();
     if (activeTab === 'overview') renderOverview();
     loadMyContributions();
-    if (isAdmin){ loadPendingContribs(); loadPendingMembers(); }
+    if (isAdmin) loadPendingContribs();
   }
 
   function onSignedOut(){
-    session = null; profile = null; isAdmin = false; isApproved = false;
+    session = null; profile = null; isAdmin = false;
     document.getElementById('accountBox').style.display = 'none';
     document.getElementById('openAuthBtn').style.display = 'inline-block';
     document.getElementById('tabAprovacoes').style.display = 'none';
@@ -639,7 +618,7 @@
     if (tab === 'overview'){ document.getElementById('tabOverview').classList.add('active'); document.getElementById('overviewView').style.display = 'block'; renderOverview(); }
     if (tab === 'contribuir'){ document.getElementById('tabContribuir').classList.add('active'); document.getElementById('contribView').style.display = 'block'; loadMyContributions(); }
     if (tab === 'historico'){ document.getElementById('tabHistorico').classList.add('active'); document.getElementById('historicoView').style.display = 'block'; loadHistory(); }
-    if (tab === 'aprovacoes'){ document.getElementById('tabAprovacoes').classList.add('active'); document.getElementById('aprovacoesView').style.display = 'block'; loadPendingContribs(); loadPendingMembers(); }
+    if (tab === 'aprovacoes'){ document.getElementById('tabAprovacoes').classList.add('active'); document.getElementById('aprovacoesView').style.display = 'block'; loadPendingContribs(); }
   }
   document.getElementById('tabItem').onclick = () => setActiveTab('item');
   document.getElementById('tabOverview').onclick = () => setActiveTab('overview');
@@ -858,12 +837,6 @@
   document.getElementById('contribSubmitBtn').onclick = async () => {
     if (!sb) return;
     if (!session){ openAuthModal(); return; }
-    if (!isApproved){
-      setContribMsg(profile.status === 'rejected'
-        ? 'Sua conta foi recusada pelo administrador.'
-        : 'Sua conta ainda está aguardando aprovação do administrador.', 'error');
-      return;
-    }
     const itemId = document.getElementById('contribItem').value;
     const matName = document.getElementById('contribMaterial').value;
     const qty = parseInt(document.getElementById('contribQty').value, 10);
@@ -945,40 +918,6 @@
           <div class="when">${new Date(c.reviewed_at || c.created_at).toLocaleString('pt-BR')}</div>
         </div>
       </div>`).join('');
-  }
-
-  // ---------------- APROVAÇÕES DE MEMBRO (admin) ----------------
-  async function loadPendingMembers(){
-    if (!sb || !isAdmin) return;
-    const { data } = await sb.from('profiles').select('*').eq('status', 'pending').eq('is_admin', false).order('created_at', { ascending: true });
-    const el = document.getElementById('pendingMembersList');
-    if (!data || !data.length){ el.innerHTML = '<div class="empty-state">Nenhuma conta nova aguardando aprovação.</div>'; return; }
-    el.innerHTML = data.map(p => `
-      <div class="contrib-card">
-        <div class="contrib-info">
-          <div class="who">${p.nickname}</div>
-          <div class="when">Cadastrado em ${new Date(p.created_at).toLocaleString('pt-BR')}</div>
-        </div>
-        <div class="contrib-actions">
-          <button class="btn small" onclick="approveMember('${p.id}')">Aprovar</button>
-          <button class="btn small reject" onclick="rejectMember('${p.id}')">Rejeitar</button>
-        </div>
-      </div>`).join('');
-  }
-
-  async function approveMember(id){
-    try{
-      const { error } = await sb.from('profiles').update({ status: 'approved' }).eq('id', id);
-      if (error) throw error;
-      loadPendingMembers();
-    }catch(err){ alert(err.message || 'Não foi possível aprovar.'); }
-  }
-  async function rejectMember(id){
-    try{
-      const { error } = await sb.from('profiles').update({ status: 'rejected' }).eq('id', id);
-      if (error) throw error;
-      loadPendingMembers();
-    }catch(err){ alert(err.message || 'Não foi possível rejeitar.'); }
   }
 
   // ---------------- APROVAÇÕES (admin) ----------------
